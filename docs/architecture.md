@@ -29,7 +29,7 @@ There is no shared commerce interface yet. The providers use different IDs, fiel
 
 The Shopify client owns GraphQL transport and token refresh. Each resource module owns its query or mutation, typed input, response checks, and API error interpretation. Horoshop follows the same split with JSON POST, a cached token, and operation-specific response validation. MCP tool modules own user-facing schemas and descriptions; they do not build raw requests.
 
-Order summaries page through accessible orders and report whether they reached the last page. They are derived metrics, not native reports. Horoshop order value is grouped by currency and uses `total_sum`, which excludes shipping. Shopify uses the current order total after returns and omits cancelled and test orders from the amount. Neither metric should be presented as settled revenue.
+Order summaries page through accessible orders and report whether they reached the last page. They are derived metrics, not native reports. Horoshop order value is grouped by currency and uses `total_sum`, which excludes shipping. Shopify uses the current order total after returns and omits cancelled and test orders from the amount. Neither metric should be presented as settled revenue. The separate Shopify sales report uses native ShopifyQL, with a fixed metric allowlist, date range, and explicit row limit.
 
 Mutation responses are not treated as success solely because HTTP succeeded. Shopify `userErrors` and Horoshop `WARNING` or per-record errors fail the tool call. Async Shopify cancellation returns a job ID and a state that says processing was accepted.
 
@@ -50,3 +50,4 @@ Mutation responses are not treated as success solely because HTTP succeeded. Sho
 2. Add cross-store stock and order comparison using explicit SKU and currency rules.
 3. Add Shopify order edit, refund, partial fulfillment, and advanced discount workflows as separate modules with their own permission and confirmation rules.
 4. Add Horoshop customer reads and any additional order or content operations only where documented by the store's API. Do not infer endpoints from admin UI capabilities.
+5. Replace Shopify's deprecated discount-node list queries when a supported replacement exposes IDs accepted by the existing discount mutations.

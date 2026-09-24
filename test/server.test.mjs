@@ -28,9 +28,11 @@ test("registers platform-specific tools for both configured stores", async () =>
     assert.ok(names.includes("shopify_customer_delete"));
     assert.ok(names.includes("shopify_order_delete"));
     assert.ok(names.includes("shopify_order_summary"));
+    assert.ok(names.includes("shopify_sales_report"));
     assert.ok(names.includes("shopify_discount_code_create"));
     assert.ok(names.includes("horoshop_product_list"));
     assert.ok(names.includes("horoshop_product_update"));
+    assert.ok(names.includes("horoshop_product_create"));
     assert.ok(names.includes("horoshop_order_summary"));
     assert.ok(names.includes("horoshop_order_update"));
     assert.ok(names.includes("horoshop_category_list"));

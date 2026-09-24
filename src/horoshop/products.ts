@@ -39,6 +39,34 @@ export interface ProductUpdate {
   stock?: { warehouse: string; quantity: number };
 }
 
+export interface ProductCreate {
+  article: string;
+  title: string;
+  categoryId: number;
+  price?: number;
+  description?: string;
+  visible?: boolean;
+}
+
+export async function createProduct(client: HoroshopClient, product: ProductCreate): Promise<{ article: string; created: true }> {
+  const existing = await listProducts(client, { article: product.article, offset: 0, limit: 2 });
+  if (existing.some((candidate) => candidate.article === product.article)) {
+    throw new Error(`Horoshop product ${product.article} already exists`);
+  }
+  const result = await client.request("catalog/import", {
+    products: [{
+      article: product.article,
+      title: product.title,
+      parent: { id: product.categoryId },
+      ...(product.price !== undefined && { price: product.price }),
+      ...(product.description !== undefined && { description: product.description }),
+      ...(product.visible !== undefined && { display_in_showcase: product.visible }),
+    }],
+  });
+  if (result.status !== "OK") throw new Error(`Horoshop catalog/import returned ${result.status}`);
+  return { article: product.article, created: true };
+}
+
 export async function updateProduct(client: HoroshopClient, update: ProductUpdate): Promise<{ article: string; updated: true }> {
   const { article, price, title, description, visible, stock } = update;
   if ([price, title, description, visible, stock].every((value) => value === undefined)) {

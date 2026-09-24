@@ -5,7 +5,7 @@ import { listCategories } from "../horoshop/categories.js";
 import type { HoroshopClient } from "../horoshop/client.js";
 import { upsertCustomer } from "../horoshop/customers.js";
 import { listOrders, listOrderStatuses, summarizeOrders, updateOrder } from "../horoshop/orders.js";
-import { listProducts, updateProduct } from "../horoshop/products.js";
+import { createProduct, listProducts, updateProduct } from "../horoshop/products.js";
 
 const date = z.iso.date();
 
@@ -61,6 +61,23 @@ export function registerHoroshopTools(server: McpServer, client: HoroshopClient)
       annotations: { readOnlyHint: true },
     },
     (input) => resultOf(async () => ({ products: await listProducts(client, input), offset: input.offset, limit: input.limit })),
+  );
+
+  server.registerTool(
+    "horoshop_product_create",
+    {
+      title: "Create a Horoshop product",
+      description: "Create a product with a unique article, title, and category ID. Use horoshop_category_list to find the category. Optional fields apply only to the new product.",
+      inputSchema: {
+        article: z.string().min(1),
+        title: z.string().min(1),
+        categoryId: z.number().int().positive(),
+        price: z.number().nonnegative().optional(),
+        description: z.string().optional(),
+        visible: z.boolean().optional(),
+      },
+    },
+    (input) => resultOf(() => createProduct(client, input)),
   );
 
   server.registerTool(

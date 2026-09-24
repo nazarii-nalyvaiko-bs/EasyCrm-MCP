@@ -5,7 +5,7 @@ const orderSchema = z.object({
   order_id: z.number().int(),
   stat_status: z.number().int().optional(),
   stat_created: z.string().optional(),
-  total_sum: z.coerce.number().finite().optional(),
+  total_sum: z.union([z.number().finite(), z.string().regex(/^-?\d+(?:\.\d+)?$/).transform(Number)]).optional(),
   currency: z.string().optional(),
   payed: z.union([z.literal(0), z.literal(1)]).optional(),
   analytics: z.object({ utm_source: z.string().nullish() }).passthrough().nullish(),
@@ -98,6 +98,7 @@ export interface OrderSummary {
   orderCount: number;
   paidOrderCount: number;
   totalsByCurrency: Record<string, number>;
+  ordersMissingTotal: number;
   countsByStatus: Record<string, number>;
   countsByUtmSource: Record<string, number>;
   complete: boolean;
@@ -106,7 +107,7 @@ export interface OrderSummary {
 
 export async function summarizeOrders(client: HoroshopClient, from: string, to: string, maxPages = 50): Promise<OrderSummary> {
   const summary: OrderSummary = {
-    from, to, orderCount: 0, paidOrderCount: 0, totalsByCurrency: {}, countsByStatus: {},
+    from, to, orderCount: 0, paidOrderCount: 0, totalsByCurrency: {}, ordersMissingTotal: 0, countsByStatus: {},
     countsByUtmSource: {}, complete: false, processedPages: 0,
   };
   const limit = 100;
@@ -118,6 +119,8 @@ export async function summarizeOrders(client: HoroshopClient, from: string, to: 
       if (order.payed === 1) summary.paidOrderCount += 1;
       if (order.currency && order.total_sum !== undefined) {
         summary.totalsByCurrency[order.currency] = (summary.totalsByCurrency[order.currency] ?? 0) + order.total_sum;
+      } else {
+        summary.ordersMissingTotal += 1;
       }
       const status = order.stat_status === undefined ? "unknown" : String(order.stat_status);
       summary.countsByStatus[status] = (summary.countsByStatus[status] ?? 0) + 1;

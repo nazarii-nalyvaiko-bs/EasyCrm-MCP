@@ -5,7 +5,7 @@ import { listCategories } from "../dist/horoshop/categories.js";
 import { normalizeHoroshopUrl } from "../dist/horoshop/config.js";
 import { upsertCustomer } from "../dist/horoshop/customers.js";
 import { listOrders, listOrderStatuses, summarizeOrders, updateOrder } from "../dist/horoshop/orders.js";
-import { listProducts, updateProduct } from "../dist/horoshop/products.js";
+import { createProduct, listProducts, updateProduct } from "../dist/horoshop/products.js";
 
 const config = {
   baseUrl: "https://shop.example.com",
@@ -88,6 +88,36 @@ test("does not import a product when the article is absent", async (t) => {
       : { status: "EMPTY" });
   });
   await assert.rejects(updateProduct(new HoroshopClient(config), { article: "missing", price: 42 }), /not found/);
+  assert.equal(operations.some((url) => url.endsWith("/catalog/import/")), false);
+});
+
+test("creates a Horoshop product in a selected category after checking the article", async (t) => {
+  const requests = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    requests.push({ url, body: JSON.parse(options.body) });
+    if (url.endsWith("/auth/")) return Response.json({ status: "OK", response: { token: "token" } });
+    if (url.endsWith("/catalog/export/")) return Response.json({ status: "EMPTY" });
+    return Response.json({ status: "OK" });
+  });
+  assert.deepEqual(await createProduct(new HoroshopClient(config), {
+    article: "NEW-1", title: "New product", categoryId: 8, price: 50,
+  }), { article: "NEW-1", created: true });
+  assert.deepEqual(requests[2].body, {
+    products: [{ article: "NEW-1", title: "New product", parent: { id: 8 }, price: 50 }], token: "token",
+  });
+});
+
+test("does not overwrite a Horoshop product when creating with an existing article", async (t) => {
+  const operations = [];
+  t.mock.method(globalThis, "fetch", async (url) => {
+    operations.push(url);
+    return Response.json(url.endsWith("/auth/")
+      ? { status: "OK", response: { token: "token" } }
+      : { status: "OK", response: { products: [{ article: "SKU-1" }] } });
+  });
+  await assert.rejects(createProduct(new HoroshopClient(config), {
+    article: "SKU-1", title: "Duplicate", categoryId: 8,
+  }), /already exists/);
   assert.equal(operations.some((url) => url.endsWith("/catalog/import/")), false);
 });
 

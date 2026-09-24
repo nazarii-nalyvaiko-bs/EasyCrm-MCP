@@ -47,6 +47,10 @@ export interface PercentageCodeDiscountInput {
   appliesOncePerCustomer?: boolean;
 }
 
+export interface FixedCodeDiscountInput extends Omit<PercentageCodeDiscountInput, "percentage"> {
+  amount: string;
+}
+
 export interface CodeDiscountUpdateInput {
   title?: string;
   startsAt?: string;
@@ -102,8 +106,8 @@ export async function listCodeDiscounts(
   return data.codeDiscountNodes;
 }
 
-const CREATE_PERCENTAGE_CODE_DISCOUNT = `
-  mutation CreatePercentageCodeDiscount($input: DiscountCodeBasicInput!) {
+const CREATE_BASIC_CODE_DISCOUNT = `
+  mutation CreateBasicCodeDiscount($input: DiscountCodeBasicInput!) {
     discountCodeBasicCreate(basicCodeDiscount: $input) {
       codeDiscountNode { id }
       userErrors { field message }
@@ -118,13 +122,32 @@ export async function createPercentageCodeDiscount(
     throw new Error("percentage must be greater than 0 and at most 100");
   }
   const { percentage, ...options } = input;
+  return createBasicCodeDiscount(client, options, { percentage: percentage / 100 });
+}
+
+export async function createFixedCodeDiscount(
+  client: ShopifyClient,
+  input: FixedCodeDiscountInput,
+): Promise<{ id: string }> {
+  assertFixedAmount(input.amount);
+  const { amount, ...options } = input;
+  return createBasicCodeDiscount(client, options, {
+    discountAmount: { amount, appliesOnEachItem: false },
+  });
+}
+
+async function createBasicCodeDiscount(
+  client: ShopifyClient,
+  options: Omit<PercentageCodeDiscountInput, "percentage">,
+  value: { percentage: number } | { discountAmount: { amount: string; appliesOnEachItem: false } },
+): Promise<{ id: string }> {
   const data = await client.query<{ discountCodeBasicCreate: DiscountMutationPayload }>(
-    CREATE_PERCENTAGE_CODE_DISCOUNT,
+    CREATE_BASIC_CODE_DISCOUNT,
     {
       input: {
         ...options,
         context: { all: "ALL" },
-        customerGets: { value: { percentage: percentage / 100 }, items: { all: true } },
+        customerGets: { value, items: { all: true } },
       },
     },
   );
@@ -133,6 +156,15 @@ export async function createPercentageCodeDiscount(
     data.discountCodeBasicCreate.codeDiscountNode,
     data.discountCodeBasicCreate.userErrors,
   );
+}
+
+function assertFixedAmount(amount: string): void {
+  if (!/^\d+(?:\.\d{1,2})?$/.test(amount)) {
+    throw new Error("amount must be a decimal string with up to two fractional digits");
+  }
+  if (Number(amount) <= 0) {
+    throw new Error("amount must be greater than 0");
+  }
 }
 
 const UPDATE_CODE_DISCOUNT = `
@@ -225,12 +257,7 @@ export async function createAutomaticDiscount(
   if (value.kind === "percentage" && (value.percentage <= 0 || value.percentage > 100)) {
     throw new Error("percentage must be greater than 0 and at most 100");
   }
-  if (value.kind === "fixedAmount" && !/^(?:\d+)(?:\.\d{1,2})?$/.test(value.amount)) {
-    throw new Error("amount must be a decimal string with up to two fractional digits");
-  }
-  if (value.kind === "fixedAmount" && Number(value.amount) <= 0) {
-    throw new Error("amount must be greater than 0");
-  }
+  if (value.kind === "fixedAmount") assertFixedAmount(value.amount);
   const discountValue = value.kind === "percentage"
     ? { percentage: value.percentage / 100 }
     : { discountAmount: { amount: value.amount, appliesOnEachItem: false } };

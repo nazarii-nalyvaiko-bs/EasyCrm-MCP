@@ -54,8 +54,10 @@ You need a store on a plan with Admin API access and one of:
    | Orders | `read_orders` | `write_orders` |
    | Fulfillment orders | Matching assigned, merchant-managed, or third-party fulfillment read scope | Matching fulfillment write scope |
    | Discounts | `read_discounts` | `write_discounts` |
+   | Native sales reports | `read_reports` | None |
 
    Shopify customer data also requires protected customer data approval. Orders older than 60 days normally require `read_all_orders`. Some actions require additional staff permissions or an offline token. The individual tool descriptions state these cases.
+   The native Shopify sales report requires Level 2 protected customer data access, as documented for `shopifyqlQuery`.
 3. Copy the Client ID and Client Secret from the app's settings.
 
 **Option B: existing admin access token**
@@ -116,7 +118,8 @@ You can configure either platform by omitting the other platform's variables. Fo
 | `shopify_order_fulfillment_orders` | Find fulfillable units for an order |
 | `shopify_fulfillment_create` | Fulfill one entire fulfillment order |
 | `shopify_order_summary` | Compute a bounded order summary from accessible orders |
-| `shopify_discount_code_list/create/update/delete` | Manage basic code discounts |
+| `shopify_sales_report` | Read native Shopify Analytics sales metrics by day, month, or total |
+| `shopify_discount_code_list/create/create_fixed/update/delete` | Manage basic code discounts by percentage or fixed amount |
 | `shopify_discount_automatic_list/create/update/delete` | Manage basic automatic discounts |
 
 ### Horoshop
@@ -125,6 +128,7 @@ You can configure either platform by omitting the other platform's variables. Fo
 |------|--------------|
 | `horoshop_category_list` | Read child categories under a parent |
 | `horoshop_product_list` | Read products, optionally filtered by article (SKU) |
+| `horoshop_product_create` | Create a product in a selected category |
 | `horoshop_product_update` | Update an existing product's price, text, visibility, or warehouse stock |
 | `horoshop_customer_upsert` | Create or update one customer by email |
 | `horoshop_order_list` | Read paged orders with optional date and status filters |
@@ -134,7 +138,7 @@ You can configure either platform by omitting the other platform's variables. Fo
 
 Each tool is tied to one configured platform. The Horoshop product tool supports `offset` and `limit` for paging, with a maximum of 500 products per request per the [Horoshop export API](https://horoshop.notion.site/1b6cc289707981e782b6e7c57c2fa526). Horoshop category export requires platform version 4 or later.
 
-Both order summaries are calculated by this server from API orders. They are not native analytics reports or payment revenue. Horoshop scans at most 5,000 orders and reports `complete: false` if more may exist. Its `total_sum` values include discounts and exclude shipping. Shopify reports `paginationComplete` and a cursor if it stops before the last page.
+Both order summaries are calculated by this server from API orders. They are not native analytics reports or payment revenue. Horoshop scans at most 5,000 orders and reports `complete: false` if more may exist. Its `total_sum` values include discounts and exclude shipping. Shopify reports `paginationComplete` and a cursor if it stops before the last page. `shopify_sales_report` separately uses [Shopify's native ShopifyQL analytics API](https://shopify.dev/docs/api/admin-graphql/latest/queries/shopifyqlQuery).
 
 The current tools do not cover every action in either admin. In particular, Shopify refunds, partial fulfillment, edits to line items, advanced discount types, and Horoshop order creation or deletion need separate workflows and API verification. Shopify cancellation returns a job ID because processing is asynchronous. See [the architecture notes](docs/architecture.md) for the extension plan.
 

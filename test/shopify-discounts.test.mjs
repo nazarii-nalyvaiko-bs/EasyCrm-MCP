@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   createAutomaticDiscount,
+  createFixedCodeDiscount,
   createPercentageCodeDiscount,
   deleteAutomaticDiscount,
   deleteCodeDiscount,
@@ -65,6 +66,42 @@ test("rejects invalid percentage before sending a mutation", async () => {
     startsAt: "2026-09-25T00:00:00Z",
     percentage: 110,
   }), /percentage/);
+  assert.equal(calls.length, 0);
+});
+
+test("creates a fixed amount code discount once across the order", async () => {
+  const id = "gid://shopify/DiscountCodeNode/12";
+  const { calls, client } = clientReturning({
+    discountCodeBasicCreate: { codeDiscountNode: { id }, userErrors: [] },
+  });
+  assert.deepEqual(await createFixedCodeDiscount(client, {
+    title: "Save 20",
+    code: "SAVE20",
+    startsAt: "2026-09-25T00:00:00Z",
+    amount: "20.00",
+  }), { id });
+  assert.deepEqual(calls[0].variables.input, {
+    title: "Save 20",
+    code: "SAVE20",
+    startsAt: "2026-09-25T00:00:00Z",
+    context: { all: "ALL" },
+    customerGets: {
+      value: { discountAmount: { amount: "20.00", appliesOnEachItem: false } },
+      items: { all: true },
+    },
+  });
+});
+
+test("rejects invalid fixed code amounts before sending a mutation", async () => {
+  const { calls, client } = clientReturning({});
+  for (const amount of ["0.00", "-10", "12.345", "not-a-number"]) {
+    await assert.rejects(createFixedCodeDiscount(client, {
+      title: "Invalid",
+      code: "INVALID",
+      startsAt: "2026-09-25T00:00:00Z",
+      amount,
+    }), /amount/);
+  }
   assert.equal(calls.length, 0);
 });
 

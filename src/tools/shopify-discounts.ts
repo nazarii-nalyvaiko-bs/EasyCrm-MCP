@@ -5,6 +5,7 @@ import type { ShopifyClient } from "../shopify/client.js";
 import { ShopifyGraphqlError } from "../shopify/errors.js";
 import {
   createAutomaticDiscount,
+  createFixedCodeDiscount,
   createPercentageCodeDiscount,
   deleteAutomaticDiscount,
   deleteCodeDiscount,
@@ -22,14 +23,25 @@ const pageInput = {
   after: z.string().optional(),
 };
 
-const createInput = {
+const codeCreateBaseInput = {
   title: z.string().min(1).describe("Discount title"),
   code: z.string().min(1).describe("Code entered at checkout"),
   startsAt: dateTime.describe("Start date and time with timezone"),
   endsAt: dateTime.nullable().optional().describe("Expiration, or null for no expiration"),
-  percentage: z.number().gt(0).max(100).describe("Percent off all products, from 0 to 100"),
   usageLimit: z.number().int().positive().nullable().optional(),
   appliesOncePerCustomer: z.boolean().optional(),
+};
+
+const createInput = {
+  ...codeCreateBaseInput,
+  percentage: z.number().gt(0).max(100).describe("Percent off all products, from 0 to 100"),
+};
+
+const fixedCodeCreateInput = {
+  ...codeCreateBaseInput,
+  amount: z.string().regex(/^\d+(?:\.\d{1,2})?$/)
+    .refine((amount) => Number(amount) > 0)
+    .describe("Fixed amount off the order in store currency, e.g. 20.00"),
 };
 
 const updateInput = {
@@ -104,6 +116,17 @@ export function registerShopifyDiscountTools(server: McpServer, client: ShopifyC
       inputSchema: createInput,
     },
     guard(async (input) => result(await createPercentageCodeDiscount(client, input))),
+  );
+
+  server.registerTool(
+    "shopify_discount_code_create_fixed",
+    {
+      title: "Create fixed amount code discount",
+      description:
+        "Create a fixed amount code discount for all products and all buyers. Amount is in store currency and applies once to the order.",
+      inputSchema: fixedCodeCreateInput,
+    },
+    guard(async (input) => result(await createFixedCodeDiscount(client, input))),
   );
 
   server.registerTool(
