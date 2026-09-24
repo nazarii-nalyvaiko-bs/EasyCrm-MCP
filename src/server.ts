@@ -11,6 +11,7 @@ import { registerShopifyDiscountTools } from "./tools/shopify-discounts.js";
 import { registerShopifyOrderTools } from "./tools/shopify-orders.js";
 import { registerShopifyProductMediaTools } from "./tools/shopify-product-media.js";
 import { registerShopifyThemeManagementTools } from "./tools/shopify-theme-management.js";
+import { registerShopifyThemeMediaTools } from "./tools/shopify-theme-media.js";
 import { registerShopTools } from "./tools/shopify.js";
 
 const SERVER_INSTRUCTIONS =
@@ -35,6 +36,7 @@ export function createServer(config: AppConfig): McpServer {
     registerShopifyDiscountTools(server, client);
     registerShopifyAnalyticsTools(server, client);
     registerShopifyThemeManagementTools(server, client);
+    registerShopifyThemeMediaTools(server, client);
   }
   if (config.horoshop) {
     registerHoroshopTools(server, new HoroshopClient(config.horoshop));

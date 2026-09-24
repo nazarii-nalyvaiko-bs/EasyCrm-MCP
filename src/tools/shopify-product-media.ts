@@ -4,6 +4,7 @@ import { z } from "zod";
 import { CredentialExchangeError } from "../shopify/auth/auth.js";
 import type { ShopifyClient } from "../shopify/client.js";
 import { ShopifyGraphqlError } from "../shopify/errors.js";
+import { addLocalProductImage } from "../shopify/operations/local-product-media.js";
 import { addProductImages, createDraftProductWithImages, listProductMedia } from "../shopify/operations/product-media.js";
 
 const productId = z.string().regex(/^gid:\/\/shopify\/Product\/\d+$/).describe("Shopify product GID");
@@ -64,6 +65,22 @@ export function registerShopifyProductMediaTools(server: McpServer, client: Shop
   }, async ({ productId: id, images: sources }): Promise<CallToolResult> => {
     try {
       return result(await addProductImages(client, id, sources));
+    } catch (error) {
+      return errorResult(error);
+    }
+  });
+
+  server.registerTool("shopify_product_image_add_local", {
+    title: "Add a local image to a Shopify product",
+    description: "Read one local PNG, JPEG, WebP, or GIF (up to 20 MB), upload it to Shopify staging, and attach it to an existing product. Use shopify_product_media_list to check processing status. Requires write_products; Shopify may also require write_files for media uploads.",
+    inputSchema: {
+      productId,
+      filePath: z.string().min(1).describe("Absolute path to an image on the MCP server's machine"),
+      alt: z.string().optional(),
+    },
+  }, async ({ productId: id, filePath, alt }): Promise<CallToolResult> => {
+    try {
+      return result(await addLocalProductImage(client, id, filePath, alt));
     } catch (error) {
       return errorResult(error);
     }

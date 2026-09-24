@@ -27,6 +27,10 @@ test("registers platform-specific tools for both configured stores", async () =>
     assert.ok(names.includes("shopify_theme_active"));
     assert.ok(names.includes("shopify_theme_duplicate_draft"));
     assert.ok(names.includes("shopify_theme_publish"));
+    assert.ok(names.includes("shopify_theme_media_slots"));
+    assert.ok(names.includes("shopify_theme_media_upload_local"));
+    assert.ok(names.includes("shopify_theme_media_file_status"));
+    assert.ok(names.includes("shopify_theme_media_set"));
     assert.ok(names.includes("shopify_product_create"));
     assert.ok(names.includes("shopify_product_create_draft_with_images"));
     assert.ok(names.includes("shopify_product_media_list"));
