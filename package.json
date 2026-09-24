@@ -1,6 +1,6 @@
 {
   "name": "easycrm-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "mcpName": "io.github.nazarii-nalyvaiko-bs/easycrm-mcp",
   "description": "MCP server for managing a Shopify store and a Horoshop store",
   "repository": {
