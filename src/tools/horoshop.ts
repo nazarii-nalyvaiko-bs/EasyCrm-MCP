@@ -5,6 +5,7 @@ import { listCategories } from "../horoshop/categories.js";
 import type { HoroshopClient } from "../horoshop/client.js";
 import { upsertCustomer } from "../horoshop/customers.js";
 import { listOrders, listOrderStatuses, summarizeOrders, updateOrder } from "../horoshop/orders.js";
+import { getPurchaseHistory } from "../horoshop/purchase-history.js";
 import { createProduct, listProducts, updateProduct } from "../horoshop/products.js";
 import { getProductReviews } from "../horoshop/reviews.js";
 
@@ -27,6 +28,26 @@ async function resultOf(operation: () => Promise<unknown>): Promise<CallToolResu
 }
 
 export function registerHoroshopTools(server: McpServer, client: HoroshopClient): void {
+  server.registerTool(
+    "horoshop_customer_purchase_history",
+    {
+      title: "Read Horoshop customer purchase history",
+      description: "Find orders by exact delivery email in bounded pages of Horoshop orders. Includes purchased products. Use complete and nextOffset to continue scanning; an empty result is not a complete history when complete=false. Optional dates narrow the scan.",
+      inputSchema: {
+        email: z.email(),
+        offset: z.number().int().min(0).default(0),
+        maxPages: z.number().int().min(1).max(10).default(5),
+        from: date.optional(),
+        to: date.optional(),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    (input) => resultOf(async () => {
+      if (input.from && input.to && input.from > input.to) throw new Error("from must be on or before to");
+      return getPurchaseHistory(client, input);
+    }),
+  );
+
   server.registerTool(
     "horoshop_category_list",
     {

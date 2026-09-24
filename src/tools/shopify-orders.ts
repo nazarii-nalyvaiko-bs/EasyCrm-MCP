@@ -13,8 +13,10 @@ import {
   updateOrder,
 } from "../shopify/operations/orders.js";
 import { createFulfillment, listOrderFulfillments } from "../shopify/operations/fulfillments.js";
+import { getPurchaseHistory, listOrderItems } from "../shopify/operations/purchase-history.js";
 
 const orderId = z.string().regex(/^gid:\/\/shopify\/Order\/\d+$/).describe("Shopify order GID");
+const customerId = z.string().regex(/^gid:\/\/shopify\/Customer\/\d+$/).describe("Shopify customer GID");
 const date = z.iso.date().describe("UTC calendar date, YYYY-MM-DD");
 
 function result(value: unknown): CallToolResult {
@@ -36,6 +38,36 @@ function guarded<Input>(handler: (input: Input) => Promise<CallToolResult>) {
 }
 
 export function registerShopifyOrderTools(server: McpServer, client: ShopifyClient): void {
+  server.registerTool(
+    "shopify_customer_purchase_history",
+    {
+      title: "Read Shopify customer purchase history",
+      description: "Read orders for a Shopify customer ID, newest first, including up to 20 line items per order. Follow pageInfo for more orders and use shopify_order_line_items when itemsComplete is false. Requires read_orders; orders older than 60 days need read_all_orders.",
+      inputSchema: {
+        customerId,
+        first: z.number().int().min(1).max(25).default(20),
+        after: z.string().min(1).optional().describe("Next order cursor from pageInfo"),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    guarded(async (input) => result(await getPurchaseHistory(client, input))),
+  );
+
+  server.registerTool(
+    "shopify_order_line_items",
+    {
+      title: "Read Shopify order line items",
+      description: "Read a cursor page of line items for an order. Use this to fetch remaining items when purchase history reports itemsComplete=false. Requires read_orders.",
+      inputSchema: {
+        orderId,
+        first: z.number().int().min(1).max(100).default(100),
+        after: z.string().min(1).optional().describe("Next line item cursor from pageInfo or nextItemsCursor"),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    guarded(async ({ orderId, first, after }) => result(await listOrderItems(client, orderId, first, after))),
+  );
+
   server.registerTool(
     "shopify_order_list",
     {

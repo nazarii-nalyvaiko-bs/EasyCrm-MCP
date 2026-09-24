@@ -164,9 +164,11 @@ test("registers scoped order tools with destructive deletion metadata", () => {
   const tools = new Map();
   const server = { registerTool(name, config) { tools.set(name, config); } };
   registerShopifyOrderTools(server, {});
-  assert.equal(tools.size, 9);
+  assert.equal(tools.size, 11);
   assert.equal(tools.get("shopify_order_delete").annotations.destructiveHint, true);
   assert.equal(tools.get("shopify_order_cancel").annotations.destructiveHint, true);
   assert.equal(tools.get("shopify_fulfillment_create").annotations.destructiveHint, true);
   assert.equal(tools.get("shopify_order_summary").annotations.readOnlyHint, true);
+  assert.equal(tools.get("shopify_customer_purchase_history").annotations.readOnlyHint, true);
+  assert.equal(tools.get("shopify_order_line_items").annotations.readOnlyHint, true);
 });
