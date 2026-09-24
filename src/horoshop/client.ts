@@ -41,6 +41,10 @@ export class HoroshopClient {
 
   constructor(private readonly config: HoroshopConfig) {}
 
+  get storeOrigin(): string {
+    return this.config.baseUrl;
+  }
+
   async request(operation: HoroshopOperation, parameters: Record<string, unknown> = {}): Promise<ApiEnvelope> {
     const payload = { ...parameters, token: await this.getToken() };
     let result = await this.post(operation, payload);

@@ -129,6 +129,7 @@ You can configure either platform by omitting the other platform's variables. Fo
 |------|--------------|
 | `horoshop_category_list` | Read child categories under a parent |
 | `horoshop_product_list` | Read products, optionally filtered by article (SKU) |
+| `horoshop_product_reviews` | Read public product reviews and load more batches when available |
 | `horoshop_product_create` | Create a product in a selected category with optional images |
 | `horoshop_product_update` | Update an existing product's price, text, visibility, warehouse stock, or images |
 | `horoshop_customer_upsert` | Create or update one customer by email |
@@ -138,6 +139,8 @@ You can configure either platform by omitting the other platform's variables. Fo
 | `horoshop_order_summary` | Compute bounded counts and totals from orders in a date range |
 
 Each tool is tied to one configured platform. Horoshop product creation accepts image URLs for a variant gallery or a shared gallery. Image updates require an explicit append or replace mode; replace removes the existing images in that gallery. Horoshop fetches images from the supplied URLs, with a 5 MB limit for each source image. The product list supports `offset` and `limit` for paging, with a maximum of 500 products per request per the [Horoshop export API](https://horoshop.notion.site/1b6cc289707981e782b6e7c57c2fa526). Horoshop category export requires platform version 4 or later.
+
+`horoshop_product_reviews` accepts a product URL or path on the configured store. It reads public `schema.org/Review` markup, including reviews without star ratings. It tries a plain HTTP request first. For a JavaScript challenge or additional review batches, it opens a temporary headless Chrome session and closes it after the read. Chrome must be installed locally; no browser is downloaded with this package. Set `HOROSHOP_BROWSER_EXECUTABLE_PATH` if Chrome is installed in a nonstandard location. `maxReviews` defaults to 20 and is capped at 100. `totalCount` reflects the page's review count, and `complete: false` means more reviews may exist. The tool does not read private or unpublished reviews.
 
 Before editing theme files, call `shopify_theme_active` or `shopify_theme_list`. The update tool checks the observed role again. Editing the live MAIN theme requires explicit user approval and `confirmLiveTheme: true`; publishing requires approval, `confirmPublish: true`, and the expected current MAIN theme ID. Draft themes can be edited without changing the live storefront. Shopify requires a [theme API exemption](https://shopify.dev/docs/api/admin-graphql/latest/mutations/themeDuplicate) for theme mutations.
 

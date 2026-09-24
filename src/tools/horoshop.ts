@@ -6,6 +6,7 @@ import type { HoroshopClient } from "../horoshop/client.js";
 import { upsertCustomer } from "../horoshop/customers.js";
 import { listOrders, listOrderStatuses, summarizeOrders, updateOrder } from "../horoshop/orders.js";
 import { createProduct, listProducts, updateProduct } from "../horoshop/products.js";
+import { getProductReviews } from "../horoshop/reviews.js";
 
 const date = z.iso.date();
 const imageUrls = z.array(z.url().refine((value) => /^https?:\/\//.test(value), "Use an HTTP or HTTPS image URL")).min(1);
@@ -66,6 +67,20 @@ export function registerHoroshopTools(server: McpServer, client: HoroshopClient)
       annotations: { readOnlyHint: true },
     },
     (input) => resultOf(async () => ({ products: await listProducts(client, input), offset: input.offset, limit: input.limit })),
+  );
+
+  server.registerTool(
+    "horoshop_product_reviews",
+    {
+      title: "Read Horoshop product reviews",
+      description: "Read public reviews from a product page on the configured Horoshop store. Accepts a product URL or path. Loads additional review batches when needed. totalCount comes from the page's structured data; complete=false means the returned reviews may not be the full set. A locally installed Chrome browser is needed when the page requires JavaScript or has more review batches.",
+      inputSchema: {
+        productUrl: z.string().min(1),
+        maxReviews: z.number().int().min(1).max(100).default(20),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    (input) => resultOf(() => getProductReviews(client.storeOrigin, input.productUrl, input.maxReviews)),
   );
 
   server.registerTool(
