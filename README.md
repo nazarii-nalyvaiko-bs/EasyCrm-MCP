@@ -12,7 +12,7 @@ https://github.com/user-attachments/assets/175e5051-b6ec-4201-a33e-d27c68356171
 npx -y easycrm-mcp init
 ```
 
-The renamed npm package is not published yet. Until it is published, run `npm install` and `npm run dev -- init` from this repository.
+To run the setup wizard directly from a repository checkout, use `npm ci` and `npm run dev -- init`.
 
 The wizard lets you configure Shopify, Horoshop, or both. It verifies each connection and registers the server in the client you pick:
 
