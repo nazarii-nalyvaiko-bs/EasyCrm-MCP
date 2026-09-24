@@ -1,4 +1,5 @@
 import * as fs from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import * as path from "node:path";
 import { SERVER_NAME } from "../../identity.js";
 import type { McpClient } from "./types.js";
@@ -7,18 +8,33 @@ async function readJsonFile(filePath: string): Promise<Record<string, unknown>> 
   let text: string;
   try {
     text = await fs.readFile(filePath, "utf8");
-  } catch {
-    return {};
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+    throw error;
   }
-  return JSON.parse(text) as Record<string, unknown>;
+  const parsed: unknown = JSON.parse(text);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`MCP config ${filePath} must contain a JSON object`);
+  }
+  return parsed as Record<string, unknown>;
 }
 
 async function upsertServerEntry(filePath: string, rootKey: string, entry: unknown): Promise<void> {
   const root = await readJsonFile(filePath);
+  const existing = root[rootKey];
+  if (existing !== undefined && (!existing || typeof existing !== "object" || Array.isArray(existing))) {
+    throw new Error(`MCP config ${filePath} has an invalid ${rootKey} section`);
+  }
   const servers = (root[rootKey] ??= {}) as Record<string, unknown>;
   servers[SERVER_NAME] = entry;
   await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, `${JSON.stringify(root, null, 2)}\n`);
+  const temporaryPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await fs.writeFile(temporaryPath, `${JSON.stringify(root, null, 2)}\n`, { mode: 0o600, flag: "wx" });
+    await fs.rename(temporaryPath, filePath);
+  } finally {
+    await fs.rm(temporaryPath, { force: true });
+  }
 }
 
 export interface JsonFileTarget {

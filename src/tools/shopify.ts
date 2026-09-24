@@ -4,17 +4,10 @@ import { z } from "zod";
 import { CredentialExchangeError } from "../shopify/auth/auth.js";
 import type { ShopifyClient } from "../shopify/client.js";
 import { ShopifyGraphqlError } from "../shopify/errors.js";
-import {
-  createPage,
-  fetchShopInfo,
-  listMenus,
-  listPages,
-  listThemes,
-  readThemeFile,
-  updateMenu,
-  updatePage,
-  updateThemeFile,
-} from "../shopify/operations/shop.js";
+import { fetchShopInfo } from "../shopify/operations/shop.js";
+import { createPage, listPages, updatePage } from "../shopify/operations/pages.js";
+import { listMenus, updateMenu } from "../shopify/operations/menus.js";
+import { listThemes, readThemeFile, updateThemeFile } from "../shopify/operations/themes.js";
 
 const MAX_THEME_FILE_BYTES = 1_000_000;
 
@@ -31,6 +24,10 @@ const themeFileLocationInput = {
 
 const updateThemeFileInput = {
   ...themeFileLocationInput,
+  expectedRole: z.enum(["MAIN", "UNPUBLISHED", "DEVELOPMENT", "DEMO"])
+    .describe("Role observed from a fresh shopify_theme_list or shopify_theme_active call. The update fails if it changed."),
+  confirmLiveTheme: z.boolean().default(false)
+    .describe("Set true only after the user explicitly approves editing the active MAIN theme."),
   fileContent: z
     .string()
     .max(MAX_THEME_FILE_BYTES)
@@ -51,7 +48,7 @@ const pageCreateInput = {
 };
 
 const pageUpdateInput = {
-  id: z.string().startsWith("gid://shopify/Page/").describe("Page GID from page_list"),
+  id: z.string().startsWith("gid://shopify/Page/").describe("Page GID from shopify_page_list"),
   title: z.string().optional().describe("New page title"),
   body: z.string().optional().describe("New page content as HTML"),
   handle: z.string().optional().describe("New URL slug"),
@@ -85,7 +82,7 @@ const menuItemInput = z.object({
 });
 
 const menuUpdateInput = {
-  menuId: z.string().startsWith("gid://shopify/Menu/").describe("Menu GID from menu_list"),
+  menuId: z.string().startsWith("gid://shopify/Menu/").describe("Menu GID from shopify_menu_list"),
   title: z.string().describe("Menu title (required by Shopify even if unchanged)"),
   items: z
     .array(menuItemInput.extend({
@@ -124,7 +121,7 @@ function guard<Input>(handler: (input: Input) => Promise<CallToolResult>) {
 
 export function registerShopTools(server: McpServer, shopify: ShopifyClient): void {
   server.registerTool(
-    "shop_get_info",
+    "shopify_get_info",
     {
       title: "Get shop info",
       description:
@@ -135,22 +132,22 @@ export function registerShopTools(server: McpServer, shopify: ShopifyClient): vo
   );
 
   server.registerTool(
-    "theme_list",
+    "shopify_theme_list",
     {
       title: "List themes",
       description:
-        "List the store's themes with their GIDs and roles. Role MAIN is the published live theme. Use the id from here for theme_read_file and theme_update_file.",
+        "List the store's themes with their GIDs and roles. Role MAIN is the published live theme. Use the id from here for shopify_theme_read_file and shopify_theme_update_file.",
       annotations: { readOnlyHint: true },
     },
     guard(async () => jsonResult(await listThemes(shopify))),
   );
 
   server.registerTool(
-    "theme_read_file",
+    "shopify_theme_read_file",
     {
       title: "Read theme file",
       description:
-        "Read the content of one file in a Shopify theme. Get the theme ID from theme_list first.",
+        "Read the content of one file in a Shopify theme. Get the theme ID from shopify_theme_list first.",
       inputSchema: themeFileLocationInput,
       annotations: { readOnlyHint: true },
     },
@@ -158,11 +155,11 @@ export function registerShopTools(server: McpServer, shopify: ShopifyClient): vo
   );
 
   server.registerTool(
-    "theme_update_file",
+    "shopify_theme_update_file",
     {
       title: "Update theme file",
       description:
-        "Overwrite one file in a Shopify theme with new content. Get the theme ID from theme_list first.",
+        "Overwrite one file in a Shopify theme. First read the current theme role and show the user which theme is active. If the target is MAIN, ask the user for explicit approval before setting confirmLiveTheme=true. An unexpected role change stops the update.",
       inputSchema: updateThemeFileInput,
       annotations: { destructiveHint: true },
     },
@@ -170,18 +167,18 @@ export function registerShopTools(server: McpServer, shopify: ShopifyClient): vo
   );
 
   server.registerTool(
-    "page_list",
+    "shopify_page_list",
     {
       title: "List pages",
       description:
-        "List the store's pages with their GIDs, handles, and publish status. Use the id from here for page_update.",
+        "List the store's pages with their GIDs, handles, and publish status. Use the id from here for shopify_page_update.",
       annotations: { readOnlyHint: true },
     },
     guard(async () => jsonResult(await listPages(shopify))),
   );
 
   server.registerTool(
-    "page_create",
+    "shopify_page_create",
     {
       title: "Create page",
       description:
@@ -192,11 +189,11 @@ export function registerShopTools(server: McpServer, shopify: ShopifyClient): vo
   );
 
   server.registerTool(
-    "page_update",
+    "shopify_page_update",
     {
       title: "Update page",
       description:
-        "Update an existing page's title, body, handle, or publish status. Only provided fields change. Get the page GID from page_list.",
+        "Update an existing page's title, body, handle, or publish status. Only provided fields change. Get the page GID from shopify_page_list.",
       inputSchema: pageUpdateInput,
       annotations: { destructiveHint: true },
     },
@@ -204,22 +201,22 @@ export function registerShopTools(server: McpServer, shopify: ShopifyClient): vo
   );
 
   server.registerTool(
-    "menu_list",
+    "shopify_menu_list",
     {
       title: "List menus",
       description:
-        "List the store's navigation menus with their GIDs, handles, and items. Themes reference menus by handle (e.g. main-menu, footer). Use the id and current items from here for menu_update.",
+        "List the store's navigation menus with their GIDs, handles, and items. Themes reference menus by handle (e.g. main-menu, footer). Use the id and current items from here for shopify_menu_update.",
       annotations: { readOnlyHint: true },
     },
     guard(async () => jsonResult(await listMenus(shopify))),
   );
 
   server.registerTool(
-    "menu_update",
+    "shopify_menu_update",
     {
       title: "Update menu",
       description:
-        "Replace a menu's items in the Shopify store. Items not included are DELETED from the menu, so get the current items from menu_list first and include every item you want to keep, with their ids.",
+        "Replace a menu's items in the Shopify store. Items not included are DELETED from the menu, so get the current items from shopify_menu_list first and include every item you want to keep, with their ids.",
       inputSchema: menuUpdateInput,
       annotations: { destructiveHint: true },
     },

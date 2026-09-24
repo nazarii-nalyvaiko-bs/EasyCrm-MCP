@@ -24,7 +24,6 @@ export function cliClient(target: CliTarget): McpClient {
   return {
     label: target.label,
     register: async (env) => {
-      await runCli(target.command, ["mcp", "remove", ...target.scopeArgs, SERVER_NAME], "ignore");
       const envArgs = Object.entries(env).flatMap(([name, value]) => [
         target.envFlag,
         `${name}=${value}`,
@@ -40,7 +39,7 @@ export function cliClient(target: CliTarget): McpClient {
         detail:
           result === "cliMissing"
             ? `${target.command} CLI not found on PATH`
-            : `${target.command} mcp add failed`,
+            : `${target.command} mcp add failed; any existing MCP entry was preserved`,
       };
     },
   };

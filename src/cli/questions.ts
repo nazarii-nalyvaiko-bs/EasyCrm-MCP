@@ -1,4 +1,5 @@
-import { type AuthConfig, type Config, normalizeStoreDomain } from "../config.js";
+import { type AuthConfig, type ShopifyConfig, normalizeStoreDomain } from "../shopify/config.js";
+import { normalizeHoroshopUrl, type HoroshopConfig } from "../horoshop/config.js";
 import { knownClients } from "./clients/index.js";
 import type { McpClient } from "./clients/types.js";
 import type { Prompter } from "./prompter.js";
@@ -15,19 +16,29 @@ async function askAuthConfig(prompter: Prompter): Promise<AuthConfig> {
     return { mode: "accessToken", accessToken };
   }
 
-  console.log("Using Dev Dashboard app credentials (dev.shopify.com/dashboard → your app → Client credentials).");
+  console.log("Using Dev Dashboard credentials for a store in your own Shopify organization.");
   const clientId = required("Client ID", await prompter.ask("Client ID: "));
   const clientSecret = required("Client Secret", await prompter.askSecret("Client Secret (hidden): "));
   return { mode: "clientCredentials", clientId, clientSecret };
 }
 
-export async function askShopifyConfig(prompter: Prompter): Promise<Config> {
-  const storeDomain = required(
+export async function askShopifyConfig(prompter: Prompter): Promise<ShopifyConfig> {
+  const storeDomain = normalizeStoreDomain(required(
     "Store domain",
-    normalizeStoreDomain(await prompter.ask("Store domain (my-store.myshopify.com): ")),
-  );
+    await prompter.ask("Store domain (my-store.myshopify.com): "),
+  ));
   const auth = await askAuthConfig(prompter);
   return { storeDomain, auth };
+}
+
+export async function askHoroshopConfig(prompter: Prompter): Promise<HoroshopConfig> {
+  const baseUrl = normalizeHoroshopUrl(required(
+    "Horoshop store URL",
+    await prompter.ask("Horoshop store URL (https://shop.example.com): "),
+  ));
+  const login = required("Horoshop API login", await prompter.ask("Horoshop API login: "));
+  const password = required("Horoshop API password", await prompter.askSecret("Horoshop API password (hidden): "));
+  return { baseUrl, login, password };
 }
 
 export async function askMcpClient(prompter: Prompter): Promise<McpClient | null> {

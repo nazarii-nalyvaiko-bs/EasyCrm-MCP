@@ -1,8 +1,8 @@
-import type { Config } from "../config.js";
+import type { ShopifyConfig } from "./config.js";
 import type { TokenProvider } from "./auth/auth.js";
 import { ShopifyGraphqlError } from "./errors.js";
 
-const API_VERSION = "2025-07";
+const API_VERSION = "2026-07";
 const HTTP_UNAUTHORIZED = 401;
 
 interface GraphqlError {
@@ -20,7 +20,7 @@ export class ShopifyClient {
   private readonly endpoint: string;
 
   constructor(
-    config: Config,
+    config: ShopifyConfig,
     private readonly tokenProvider: TokenProvider,
   ) {
     this.storeDomain = config.storeDomain;

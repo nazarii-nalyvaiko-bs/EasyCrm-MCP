@@ -1,23 +1,23 @@
 {
-  "name": "shopify-store-builder-mcp",
-  "version": "0.1.1",
-  "mcpName": "io.github.nazariinalyvaikobs/shopify-store-builder-mcp",
-  "description": "MCP server for building Shopify stores via the Admin GraphQL API",
+  "name": "easycrm-mcp",
+  "version": "0.1.0",
+  "mcpName": "io.github.nazarii-nalyvaiko-bs/easycrm-mcp",
+  "description": "MCP server for managing a Shopify store and a Horoshop store",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nazariinalyvaikobs/shopify-store-builder-mcp.git"
+    "url": "git+https://github.com/nazarii-nalyvaiko-bs/shopify-store-builder-mcp.git"
   },
-  "homepage": "https://github.com/nazariinalyvaikobs/shopify-store-builder-mcp#readme",
-  "bugs": { "url": "https://github.com/nazariinalyvaikobs/shopify-store-builder-mcp/issues" },
+  "homepage": "https://github.com/nazarii-nalyvaiko-bs/shopify-store-builder-mcp#readme",
+  "bugs": { "url": "https://github.com/nazarii-nalyvaiko-bs/shopify-store-builder-mcp/issues" },
   "type": "module",
-  "bin": { "shopify-store-builder-mcp": "dist/index.js" },
+  "bin": { "easycrm-mcp": "dist/index.js" },
   "files": ["dist"],
   "engines": { "node": ">=20" },
-  "keywords": ["mcp", "modelcontextprotocol", "shopify", "shopify-admin-api", "ai"],
+  "keywords": ["mcp", "modelcontextprotocol", "shopify", "horoshop", "ecommerce", "ai"],
   "scripts": {
     "dev": "tsx src/index.ts",
     "build": "tsc",
-    "test": "node --test",
+    "test": "npm run build && node --test test/*.test.mjs",
     "prepublishOnly": "npm run build"
   },
   "license": "ISC",

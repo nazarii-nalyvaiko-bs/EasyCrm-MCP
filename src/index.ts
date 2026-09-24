@@ -1,18 +1,13 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { loadAppConfig } from "./app-config.js";
 import { runInitWizard } from "./cli/init.js";
-import { loadConfig } from "./config.js";
 import { createServer } from "./server.js";
-import { createTokenProvider } from "./shopify/auth/auth.js";
 
 async function runServer(): Promise<void> {
-  const config = loadConfig();
-  const tokenProvider = createTokenProvider(config.storeDomain, config.auth);
-  await tokenProvider.getToken();
-
-  const server = createServer(config, tokenProvider);
+  const server = createServer(loadAppConfig());
   await server.connect(new StdioServerTransport());
-  console.error("shopify-store-builder MCP running on stdio");
+  console.error("EasyCRM MCP running on stdio");
 }
 
 function exitWithError(error: unknown, hint: string): never {
@@ -29,5 +24,5 @@ if (process.argv[2] === "init") {
 }
 
 await runServer().catch((error: unknown) =>
-  exitWithError(error, "Fix the Shopify configuration in your MCP settings and restart the server."),
+  exitWithError(error, "Fix the store configuration in your MCP settings and restart the server."),
 );

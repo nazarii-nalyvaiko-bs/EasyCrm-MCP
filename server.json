@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.nazariinalyvaikobs/shopify-store-builder-mcp",
-  "description": "MCP server for building Shopify stores via the Admin GraphQL API: themes, pages, and navigation",
+  "name": "io.github.nazarii-nalyvaiko-bs/easycrm-mcp",
+  "description": "MCP server for managing a Shopify store and a Horoshop store",
   "repository": {
-    "url": "https://github.com/nazariinalyvaikobs/shopify-store-builder-mcp",
+    "url": "https://github.com/nazarii-nalyvaiko-bs/shopify-store-builder-mcp",
     "source": "github"
   },
-  "version": "0.1.1",
+  "version": "0.1.0",
   "packages": [
     {
       "registryType": "npm",
-      "identifier": "shopify-store-builder-mcp",
-      "version": "0.1.1",
+      "identifier": "easycrm-mcp",
+      "version": "0.1.0",
       "transport": {
         "type": "stdio"
       },
@@ -19,7 +19,7 @@
         {
           "name": "SHOPIFY_STORE_DOMAIN",
           "description": "Store domain, e.g. my-store.myshopify.com",
-          "isRequired": true,
+          "isRequired": false,
           "format": "string",
           "isSecret": false
         },
@@ -40,6 +40,27 @@
         {
           "name": "SHOPIFY_ADMIN_ACCESS_TOKEN",
           "description": "Permanent admin access token shpat_… (option B, instead of client credentials)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "HOROSHOP_STORE_URL",
+          "description": "Horoshop store origin, e.g. https://shop.example.com",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "HOROSHOP_LOGIN",
+          "description": "Horoshop API admin login",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "HOROSHOP_PASSWORD",
+          "description": "Horoshop API admin password",
           "isRequired": false,
           "format": "string",
           "isSecret": true
