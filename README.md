@@ -6,7 +6,7 @@ The server runs locally and sends requests directly to each configured platform.
 
 ## Quick start
 
-https://github.com/user-attachments/assets/175e5051-b6ec-4201-a33e-d27c68356171
+https://github.com/user-attachments/assets/ab10078a-c557-4f72-b37a-1958c3991029
 
 ```bash
 npx -y easycrm-mcp init
