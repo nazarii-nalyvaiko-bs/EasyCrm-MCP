@@ -1,5 +1,6 @@
 import type { ShopifyClient } from "../client.js";
 import type { UserError } from "../errors.js";
+import { addDecimal } from "../../money.js";
 import { unwrapMutation } from "./mutation.js";
 
 const ORDER_FIELDS = `
@@ -190,24 +191,6 @@ export async function cancelOrder(client: ShopifyClient, input: CancelOrderInput
   };
 }
 
-function addDecimal(left: string, right: string): string {
-  const decimal = /^-?\d+(?:\.\d+)?$/;
-  if (!decimal.test(left) || !decimal.test(right)) throw new Error("Shopify returned an invalid money amount");
-  const places = Math.max(left.split(".")[1]?.length ?? 0, right.split(".")[1]?.length ?? 0);
-  const scale = 10n ** BigInt(places);
-  const toScaled = (value: string): bigint => {
-    const sign = value.startsWith("-") ? -1n : 1n;
-    const [whole, fraction = ""] = value.replace("-", "").split(".");
-    return sign * (BigInt(whole) * scale + BigInt(fraction.padEnd(places, "0") || "0"));
-  };
-  const sum = toScaled(left) + toScaled(right);
-  const sign = sum < 0n ? "-" : "";
-  const abs = sum < 0n ? -sum : sum;
-  if (!places) return `${sign}${abs}`;
-  const fraction = String(abs % scale).padStart(places, "0").replace(/0+$/, "");
-  return `${sign}${abs / scale}${fraction ? `.${fraction}` : ""}`;
-}
-
 export async function summarizeOrders(
   client: ShopifyClient,
   input: { from: string; toExclusive: string; maxPages: number },
@@ -224,8 +207,8 @@ export async function summarizeOrders(
   let amount = "0";
   let currency: string | undefined;
   let pagesRead = 0;
-  const byFinancialStatus: Record<string, number> = {};
-  const byFulfillmentStatus: Record<string, number> = {};
+  const byFinancialStatus = new Map<string, number>();
+  const byFulfillmentStatus = new Map<string, number>();
   while (pagesRead < input.maxPages) {
     const page = await listOrders(client, { first: 100, after, search });
     pagesRead += 1;
@@ -237,9 +220,9 @@ export async function summarizeOrders(
         continue;
       }
       const financialStatus = order.displayFinancialStatus ?? "UNKNOWN";
-      byFinancialStatus[financialStatus] = (byFinancialStatus[financialStatus] ?? 0) + 1;
-      byFulfillmentStatus[order.displayFulfillmentStatus] =
-        (byFulfillmentStatus[order.displayFulfillmentStatus] ?? 0) + 1;
+      byFinancialStatus.set(financialStatus, (byFinancialStatus.get(financialStatus) ?? 0) + 1);
+      byFulfillmentStatus.set(order.displayFulfillmentStatus,
+        (byFulfillmentStatus.get(order.displayFulfillmentStatus) ?? 0) + 1);
       const money = order.currentTotalPriceSet?.shopMoney;
       if (!money?.currencyCode || typeof money.amount !== "string") {
         throw new Error(`Shopify order ${order.id} has no current total`);
@@ -261,8 +244,8 @@ export async function summarizeOrders(
     metric: "Sum of current order totals after returns, including taxes and discounts, excluding cancelled and test orders. This is not payment revenue.",
     orderCount: count,
     cancelledOrderCount: cancelledCount,
-    byFinancialStatus,
-    byFulfillmentStatus,
+    byFinancialStatus: Object.fromEntries(byFinancialStatus),
+    byFulfillmentStatus: Object.fromEntries(byFulfillmentStatus),
     currentOrderTotal: { amount, currencyCode: currency ?? null },
     pagesRead,
     paginationComplete: !hasNextPage,

@@ -59,13 +59,16 @@ test("publish checks the current MAIN theme immediately before mutation", async 
 });
 
 test("publish stops if the active theme changed", async () => {
-  let mutationCalled = false;
-  const client = { async query() {
-    if (mutationCalled) throw new Error("mutation called");
-    mutationCalled = true;
+  let calls = 0;
+  const client = { async query(query, variables) {
+    calls += 1;
+    if (calls !== 1) throw new Error("Unexpected Shopify mutation");
+    assert.match(query, /query ActiveTheme/);
+    assert.equal(variables, undefined);
     return { themes: { nodes: [{ ...main, id: "gid://shopify/OnlineStoreTheme/99" }] } };
   } };
   await assert.rejects(publishTheme(client, draft.id, main.id), /Active theme changed/);
+  assert.equal(calls, 1);
 });
 
 test("publish requires Shopify confirmation for the requested theme", async () => {

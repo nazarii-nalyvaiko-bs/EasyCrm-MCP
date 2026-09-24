@@ -10,7 +10,7 @@ import {
   publishTheme,
 } from "../shopify/operations/theme-management.js";
 
-const themeId = z.string().startsWith("gid://shopify/OnlineStoreTheme/");
+const themeId = z.string().regex(/^gid:\/\/shopify\/OnlineStoreTheme\/\d+$/);
 const themeName = z.string().trim().min(1).max(255);
 
 function result(value: unknown): CallToolResult {
@@ -48,7 +48,10 @@ export function registerShopifyThemeManagementTools(server: McpServer, shopify: 
       title: "Import unpublished Shopify theme",
       description: "Import a theme ZIP from a public HTTPS URL as an UNPUBLISHED theme. The live theme is not changed. Requires write_themes and Shopify theme API exemption.",
       inputSchema: {
-        source: z.string().url().startsWith("https://").describe("Public HTTPS URL for a theme ZIP or a Shopify staged upload URL"),
+        source: z.url().refine((value) => {
+          const url = new URL(value);
+          return url.protocol === "https:" && !url.username && !url.password;
+        }, "Use an HTTPS URL without credentials").describe("Public HTTPS URL for a theme ZIP or a Shopify staged upload URL"),
         name: themeName.describe("Name of the new unpublished theme"),
       },
     },

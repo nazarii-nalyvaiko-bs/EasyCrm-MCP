@@ -4,12 +4,44 @@ import { updateThemeFile } from "../dist/shopify/operations/themes.js";
 
 test("theme update requires a returned file or background job", async () => {
   const input = { themeId: "gid://shopify/OnlineStoreTheme/1", filePath: "templates/index.json", fileContent: "{}", expectedRole: "UNPUBLISHED" };
-  const client = { async query(document) {
-    return document.includes("ThemeRoleBeforeUpdate")
-      ? { theme: { id: input.themeId, name: "Draft", role: "UNPUBLISHED" } }
-      : { themeFilesUpsert: { upsertedThemeFiles: [], job: null, userErrors: [] } };
+  let calls = 0;
+  const client = { async query(document, variables) {
+    calls += 1;
+    if (calls === 1) {
+      assert.match(document, /query ThemeRoleBeforeUpdate/);
+      assert.deepEqual(variables, { id: input.themeId });
+      return { theme: { id: input.themeId, name: "Draft", role: "UNPUBLISHED" } };
+    }
+    if (calls === 2) {
+      assert.match(document, /mutation UpdateThemeFile/);
+      assert.deepEqual(variables, { themeId: input.themeId, filePath: input.filePath, fileContent: input.fileContent });
+      return { themeFilesUpsert: { upsertedThemeFiles: [], job: null, userErrors: [] } };
+    }
+    throw new Error("Unexpected Shopify query");
   } };
   await assert.rejects(updateThemeFile(client, input), /did not confirm/);
+  assert.equal(calls, 2);
+});
+
+test("theme update rejects confirmation for a different file", async () => {
+  const input = { themeId: "gid://shopify/OnlineStoreTheme/1", filePath: "templates/index.json", fileContent: "{}", expectedRole: "UNPUBLISHED" };
+  let calls = 0;
+  const client = { async query(document, variables) {
+    calls += 1;
+    if (calls === 1) {
+      assert.match(document, /query ThemeRoleBeforeUpdate/);
+      assert.deepEqual(variables, { id: input.themeId });
+      return { theme: { id: input.themeId, name: "Draft", role: "UNPUBLISHED" } };
+    }
+    if (calls === 2) {
+      assert.match(document, /mutation UpdateThemeFile/);
+      assert.deepEqual(variables, { themeId: input.themeId, filePath: input.filePath, fileContent: input.fileContent });
+      return { themeFilesUpsert: { upsertedThemeFiles: [{ filename: "templates/other.json" }], job: null, userErrors: [] } };
+    }
+    throw new Error("Unexpected Shopify query");
+  } };
+  await assert.rejects(updateThemeFile(client, input), /confirmed templates\/other.json instead of templates\/index.json/);
+  assert.equal(calls, 2);
 });
 
 test("theme update refuses a live theme without explicit confirmation", async () => {

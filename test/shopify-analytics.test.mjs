@@ -60,6 +60,10 @@ test("treats ShopifyQL parse errors and missing tables as failures", async () =>
   await assert.rejects(() => getSalesReport(noTable, input), /no valid table data/);
   const malformed = { query: async () => ({ shopifyqlQuery: { parseErrors: [1], tableData: table } }) };
   await assert.rejects(() => getSalesReport(malformed, input), /invalid sales report/);
+  const malformedRows = { query: async () => ({
+    shopifyqlQuery: { parseErrors: [], tableData: { columns: table.columns, rows: [null] } },
+  }) };
+  await assert.rejects(() => getSalesReport(malformedRows, input), /no valid table data/);
 });
 
 test("flags a series at its result limit as possibly truncated", async () => {

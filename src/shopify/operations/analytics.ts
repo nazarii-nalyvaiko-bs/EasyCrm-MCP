@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { ShopifyClient } from "../client.js";
 
 const SALES_METRICS = [
@@ -20,15 +21,21 @@ export interface SalesReportInput {
   limit?: number;
 }
 
-interface ShopifyqlResponse {
-  shopifyqlQuery: {
-    parseErrors: string[];
-    tableData: {
-      columns: Array<{ name: string; dataType: string; displayName: string }>;
-      rows: unknown;
-    } | null;
-  } | null;
-}
+const reportSchema = z.object({
+  shopifyqlQuery: z.object({
+    parseErrors: z.array(z.string()),
+    tableData: z.unknown(),
+  }).nullable(),
+});
+
+const tableSchema = z.object({
+  columns: z.array(z.object({
+    name: z.string(),
+    dataType: z.string(),
+    displayName: z.string(),
+  })),
+  rows: z.array(z.record(z.string(), z.unknown())),
+});
 
 function assertDate(value: string): void {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))) {
@@ -70,7 +77,7 @@ function buildSalesQuery(input: SalesReportInput): string {
 
 export async function getSalesReport(client: ShopifyClient, input: SalesReportInput) {
   const query = buildSalesQuery(input);
-  const data = await client.query<ShopifyqlResponse>(
+  const response = await client.query<unknown>(
     `query ShopifySalesReport($query: String!) {
       shopifyqlQuery(query: $query) {
         tableData { columns { name dataType displayName } rows }
@@ -79,24 +86,17 @@ export async function getSalesReport(client: ShopifyClient, input: SalesReportIn
     }`,
     { query },
   );
-  const report = data.shopifyqlQuery;
-  if (!report || !Array.isArray(report.parseErrors)
-    || report.parseErrors.some((error) => typeof error !== "string")) {
+  const parsed = reportSchema.safeParse(response);
+  if (!parsed.success || !parsed.data.shopifyqlQuery) {
     throw new Error("Shopify returned an invalid sales report");
   }
+  const report = parsed.data.shopifyqlQuery;
   if (report.parseErrors.length) {
     throw new Error(`ShopifyQL rejected the report: ${report.parseErrors.join("; ")}`);
   }
-  const table = report.tableData;
-  if (!table || !Array.isArray(table.columns) || !Array.isArray(table.rows)) {
+  const table = tableSchema.safeParse(report.tableData);
+  if (!table.success) {
     throw new Error("ShopifyQL returned no valid table data");
-  }
-  if (table.columns.some((column) => !column || typeof column.name !== "string"
-    || typeof column.dataType !== "string" || typeof column.displayName !== "string")) {
-    throw new Error("ShopifyQL returned invalid columns");
-  }
-  if (table.rows.some((row: unknown) => !row || typeof row !== "object" || Array.isArray(row))) {
-    throw new Error("ShopifyQL returned invalid rows");
   }
   const rowLimit = input.interval === "total" ? null : input.limit ?? 1000;
   return {
@@ -106,9 +106,9 @@ export async function getSalesReport(client: ShopifyClient, input: SalesReportIn
     dateBounds: "inclusive",
     interval: input.interval,
     metrics: input.metrics,
-    columns: table.columns,
-    rows: table.rows as Array<Record<string, unknown>>,
+    columns: table.data.columns,
+    rows: table.data.rows,
     rowLimit,
-    possiblyTruncated: rowLimit !== null && table.rows.length >= rowLimit,
+    possiblyTruncated: rowLimit !== null && table.data.rows.length >= rowLimit,
   };
 }

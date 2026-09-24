@@ -3,7 +3,7 @@
   "name": "io.github.nazarii-nalyvaiko-bs/easycrm-mcp",
   "description": "MCP server for managing a Shopify store and a Horoshop store",
   "repository": {
-    "url": "https://github.com/nazarii-nalyvaiko-bs/shopify-store-builder-mcp",
+    "url": "https://github.com/nazarii-nalyvaiko-bs/EasyCrm-MCP",
     "source": "github"
   },
   "version": "0.1.0",

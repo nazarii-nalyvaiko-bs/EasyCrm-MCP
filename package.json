@@ -5,10 +5,10 @@
   "description": "MCP server for managing a Shopify store and a Horoshop store",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nazarii-nalyvaiko-bs/shopify-store-builder-mcp.git"
+    "url": "git+https://github.com/nazarii-nalyvaiko-bs/EasyCrm-MCP.git"
   },
-  "homepage": "https://github.com/nazarii-nalyvaiko-bs/shopify-store-builder-mcp#readme",
-  "bugs": { "url": "https://github.com/nazarii-nalyvaiko-bs/shopify-store-builder-mcp/issues" },
+  "homepage": "https://github.com/nazarii-nalyvaiko-bs/EasyCrm-MCP#readme",
+  "bugs": { "url": "https://github.com/nazarii-nalyvaiko-bs/EasyCrm-MCP/issues" },
   "type": "module",
   "bin": { "easycrm-mcp": "dist/index.js" },
   "files": ["dist"],

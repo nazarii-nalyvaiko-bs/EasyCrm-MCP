@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { AuthConfig } from "../config.js";
 
 export interface TokenProvider {
@@ -30,15 +31,15 @@ export class CredentialExchangeError extends Error {
   }
 }
 
-interface AccessTokenResponse {
-  access_token: string;
-  expires_in: number;
-}
-
 interface IssuedToken {
   token: string;
   expiresAt: number;
 }
+
+const accessTokenResponseSchema = z.object({
+  access_token: z.string().min(1),
+  expires_in: z.number().finite().positive(),
+});
 
 const MILLISECONDS_PER_SECOND = 1_000;
 
@@ -57,10 +58,13 @@ async function exchangeClientCredentials(
   });
   if (!response.ok) throw new CredentialExchangeError(response.status);
 
-  const data = (await response.json()) as AccessTokenResponse;
+  const parsed = accessTokenResponseSchema.safeParse(await response.json());
+  if (!parsed.success) {
+    throw new Error("Shopify returned an invalid credential exchange response");
+  }
   return {
-    token: data.access_token,
-    expiresAt: Date.now() + data.expires_in * MILLISECONDS_PER_SECOND,
+    token: parsed.data.access_token,
+    expiresAt: Date.now() + parsed.data.expires_in * MILLISECONDS_PER_SECOND,
   };
 }
 

@@ -1,12 +1,18 @@
 import { z } from "zod";
+import { addDecimal } from "../money.js";
 import type { HoroshopClient } from "./client.js";
+
+const decimalAmount = z.string().regex(/^-?\d+(?:\.\d+)?$/);
 
 const orderSchema = z.object({
   order_id: z.number().int(),
   stat_status: z.number().int().optional(),
   stat_created: z.string().optional(),
-  total_sum: z.union([z.number().finite(), z.string().regex(/^-?\d+(?:\.\d+)?$/).transform(Number)]).optional(),
-  currency: z.string().optional(),
+  total_sum: z.union([
+    z.number().finite().transform(String).pipe(decimalAmount),
+    decimalAmount,
+  ]).optional(),
+  currency: z.string().min(1).optional(),
   payed: z.union([z.literal(0), z.literal(1)]).optional(),
   analytics: z.object({ utm_source: z.string().nullish() }).passthrough().nullish(),
 }).passthrough();
@@ -29,10 +35,11 @@ export interface OrderFilter {
 }
 
 function responseField(response: unknown, field: string): unknown {
-  if (!response || typeof response !== "object" || !(field in response)) {
+  const parsed = z.record(z.string(), z.unknown()).safeParse(response);
+  if (!parsed.success || !Object.hasOwn(parsed.data, field)) {
     throw new Error(`Horoshop response is missing ${field}`);
   }
-  return response[field as keyof typeof response];
+  return parsed.data[field];
 }
 
 export async function listOrders(client: HoroshopClient, filter: OrderFilter): Promise<HoroshopOrder[]> {
@@ -97,7 +104,7 @@ export interface OrderSummary {
   to: string;
   orderCount: number;
   paidOrderCount: number;
-  totalsByCurrency: Record<string, number>;
+  totalsByCurrency: Record<string, string>;
   ordersMissingTotal: number;
   countsByStatus: Record<string, number>;
   countsByUtmSource: Record<string, number>;
@@ -106,31 +113,47 @@ export interface OrderSummary {
 }
 
 export async function summarizeOrders(client: HoroshopClient, from: string, to: string, maxPages = 50): Promise<OrderSummary> {
-  const summary: OrderSummary = {
-    from, to, orderCount: 0, paidOrderCount: 0, totalsByCurrency: {}, ordersMissingTotal: 0, countsByStatus: {},
-    countsByUtmSource: {}, complete: false, processedPages: 0,
-  };
+  let orderCount = 0;
+  let paidOrderCount = 0;
+  let ordersMissingTotal = 0;
+  let processedPages = 0;
+  let complete = false;
+  const totalsByCurrency = new Map<string, string>();
+  const countsByStatus = new Map<string, number>();
+  const countsByUtmSource = new Map<string, number>();
   const limit = 100;
   for (let page = 0; page < maxPages; page += 1) {
     const orders = await listOrders(client, { from, to, offset: page * limit, limit });
-    summary.processedPages += 1;
+    processedPages += 1;
     for (const order of orders) {
-      summary.orderCount += 1;
-      if (order.payed === 1) summary.paidOrderCount += 1;
-      if (order.currency && order.total_sum !== undefined) {
-        summary.totalsByCurrency[order.currency] = (summary.totalsByCurrency[order.currency] ?? 0) + order.total_sum;
+      orderCount += 1;
+      if (order.payed === 1) paidOrderCount += 1;
+      if (order.currency !== undefined && order.total_sum !== undefined) {
+        totalsByCurrency.set(order.currency,
+          addDecimal(totalsByCurrency.get(order.currency) ?? "0", order.total_sum));
       } else {
-        summary.ordersMissingTotal += 1;
+        ordersMissingTotal += 1;
       }
       const status = order.stat_status === undefined ? "unknown" : String(order.stat_status);
-      summary.countsByStatus[status] = (summary.countsByStatus[status] ?? 0) + 1;
-      const source = order.analytics?.utm_source || "unknown";
-      summary.countsByUtmSource[source] = (summary.countsByUtmSource[source] ?? 0) + 1;
+      countsByStatus.set(status, (countsByStatus.get(status) ?? 0) + 1);
+      const source = order.analytics?.utm_source ?? "unknown";
+      countsByUtmSource.set(source, (countsByUtmSource.get(source) ?? 0) + 1);
     }
     if (orders.length < limit) {
-      summary.complete = true;
+      complete = true;
       break;
     }
   }
-  return summary;
+  return {
+    from,
+    to,
+    orderCount,
+    paidOrderCount,
+    totalsByCurrency: Object.fromEntries(totalsByCurrency),
+    ordersMissingTotal,
+    countsByStatus: Object.fromEntries(countsByStatus),
+    countsByUtmSource: Object.fromEntries(countsByUtmSource),
+    complete,
+    processedPages,
+  };
 }
