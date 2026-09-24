@@ -24,6 +24,10 @@ const themeFileLocationInput = {
 
 const updateThemeFileInput = {
   ...themeFileLocationInput,
+  expectedRole: z.enum(["MAIN", "UNPUBLISHED", "DEVELOPMENT", "DEMO"])
+    .describe("Role observed from a fresh shopify_theme_list or shopify_theme_active call. The update fails if it changed."),
+  confirmLiveTheme: z.boolean().default(false)
+    .describe("Set true only after the user explicitly approves editing the active MAIN theme."),
   fileContent: z
     .string()
     .max(MAX_THEME_FILE_BYTES)
@@ -155,7 +159,7 @@ export function registerShopTools(server: McpServer, shopify: ShopifyClient): vo
     {
       title: "Update theme file",
       description:
-        "Overwrite one file in a Shopify theme with new content. Get the theme ID from shopify_theme_list first.",
+        "Overwrite one file in a Shopify theme. First read the current theme role and show the user which theme is active. If the target is MAIN, ask the user for explicit approval before setting confirmLiveTheme=true. An unexpected role change stops the update.",
       inputSchema: updateThemeFileInput,
       annotations: { destructiveHint: true },
     },

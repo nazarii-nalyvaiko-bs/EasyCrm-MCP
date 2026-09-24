@@ -18,7 +18,7 @@ flowchart LR
 ```
 
 - `src/app-config.ts` selects configured platforms and combines only their environment variables.
-- `src/shopify/` owns Shopify domain validation, token exchange, GraphQL transport, and operations grouped by theme, page, menu, product, variant, customer, order, and discount.
+- `src/shopify/` owns Shopify domain validation, token exchange, GraphQL transport, and operations grouped by theme, page, menu, product, media, variant, inventory, customer, order, fulfillment, discount, and analytics.
 - `src/horoshop/` owns HTTPS origin validation, 600-second token renewal, JSON API transport, and operations grouped by product, category, customer, and order.
 - `src/tools/` exposes typed MCP tools. A tool calls only its matching platform client.
 - `src/cli/` configures and checks each store separately, then writes one MCP client entry.
@@ -32,6 +32,10 @@ The Shopify client owns GraphQL transport and token refresh. Each resource modul
 Order summaries page through accessible orders and report whether they reached the last page. They are derived metrics, not native reports. Horoshop order value is grouped by currency and uses `total_sum`, which excludes shipping. Shopify uses the current order total after returns and omits cancelled and test orders from the amount. Neither metric should be presented as settled revenue. The separate Shopify sales report uses native ShopifyQL, with a fixed metric allowlist, date range, and explicit row limit.
 
 Mutation responses are not treated as success solely because HTTP succeeded. Shopify `userErrors` and Horoshop `WARNING` or per-record errors fail the tool call. Async Shopify cancellation returns a job ID and a state that says processing was accepted.
+
+Shopify reports the current live theme as `MAIN`. Theme file updates check the role immediately before mutation. A MAIN update requires an explicit confirmation flag. Theme publishing first compares the active theme ID with the ID the user reviewed, then requires a separate confirmation flag. Shopify has no atomic expected-MAIN condition, so a simultaneous publication by another actor remains possible between the check and mutation.
+
+Product media is asynchronous. A Shopify draft product may exist while its images are still processing. Initial variant price is a second mutation, and a failure returns the created product ID so callers can repair the partial result. Horoshop image updates require an explicit append or replace mode, since the platform's default import behavior replaces existing gallery images.
 
 ## Operational rules
 

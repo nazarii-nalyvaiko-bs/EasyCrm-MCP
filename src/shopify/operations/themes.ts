@@ -23,6 +23,8 @@ interface UpdateThemeFileInput {
   themeId: string;
   filePath: string;
   fileContent: string;
+  expectedRole: Theme["role"];
+  confirmLiveTheme?: boolean;
 }
 
 const UPDATE_THEME_FILE_MUTATION = `
@@ -47,9 +49,20 @@ export async function updateThemeFile(
   client: ShopifyClient,
   input: UpdateThemeFileInput,
 ): Promise<{ filename: string; jobId: string | null }> {
+  const current = await client.query<{ theme: Theme | null }>(
+    `query ThemeRoleBeforeUpdate($id: ID!) { theme(id: $id) { id name role } }`,
+    { id: input.themeId },
+  );
+  if (!current.theme) throw new Error(`Theme ${input.themeId} was not found`);
+  if (current.theme.role !== input.expectedRole) {
+    throw new Error(`Theme ${current.theme.name} is now ${current.theme.role}, expected ${input.expectedRole}. Review the active theme before editing.`);
+  }
+  if (current.theme.role === "MAIN" && input.confirmLiveTheme !== true) {
+    throw new Error(`Theme ${current.theme.name} is the active live theme. Ask the user before editing it, then set confirmLiveTheme to true.`);
+  }
   const data = await client.query<{ themeFilesUpsert: ThemeFilesUpsertPayload }>(
     UPDATE_THEME_FILE_MUTATION,
-    { ...input },
+    { themeId: input.themeId, filePath: input.filePath, fileContent: input.fileContent },
   );
   const { upsertedThemeFiles, job, userErrors } = data.themeFilesUpsert;
   if (userErrors.length > 0) throw new ShopifyUserError("themeFilesUpsert", userErrors);

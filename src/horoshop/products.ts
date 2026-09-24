@@ -37,6 +37,13 @@ export interface ProductUpdate {
   description?: string;
   visible?: boolean;
   stock?: { warehouse: string; quantity: number };
+  variantImages?: ProductImageUpdate;
+  commonGallery?: ProductImageUpdate;
+}
+
+export interface ProductImageUpdate {
+  links: string[];
+  mode: "append" | "replace";
 }
 
 export interface ProductCreate {
@@ -46,6 +53,13 @@ export interface ProductCreate {
   price?: number;
   description?: string;
   visible?: boolean;
+  variantImageUrls?: string[];
+  commonGalleryImageUrls?: string[];
+}
+
+function imageImport(images: ProductImageUpdate): { links: string[]; override: boolean } {
+  if (images.links.length === 0) throw new Error("Provide at least one image URL");
+  return { links: images.links, override: images.mode === "replace" };
 }
 
 export async function createProduct(client: HoroshopClient, product: ProductCreate): Promise<{ article: string; created: true }> {
@@ -61,6 +75,8 @@ export async function createProduct(client: HoroshopClient, product: ProductCrea
       ...(product.price !== undefined && { price: product.price }),
       ...(product.description !== undefined && { description: product.description }),
       ...(product.visible !== undefined && { display_in_showcase: product.visible }),
+      ...(product.variantImageUrls !== undefined && { images: imageImport({ links: product.variantImageUrls, mode: "append" }) }),
+      ...(product.commonGalleryImageUrls !== undefined && { gallery_common: imageImport({ links: product.commonGalleryImageUrls, mode: "append" }) }),
     }],
   });
   if (result.status !== "OK") throw new Error(`Horoshop catalog/import returned ${result.status}`);
@@ -68,8 +84,8 @@ export async function createProduct(client: HoroshopClient, product: ProductCrea
 }
 
 export async function updateProduct(client: HoroshopClient, update: ProductUpdate): Promise<{ article: string; updated: true }> {
-  const { article, price, title, description, visible, stock } = update;
-  if ([price, title, description, visible, stock].every((value) => value === undefined)) {
+  const { article, price, title, description, visible, stock, variantImages, commonGallery } = update;
+  if ([price, title, description, visible, stock, variantImages, commonGallery].every((value) => value === undefined)) {
     throw new Error("Provide at least one product field to update");
   }
   const existing = await listProducts(client, { article, offset: 0, limit: 2 });
@@ -84,6 +100,8 @@ export async function updateProduct(client: HoroshopClient, update: ProductUpdat
       ...(description !== undefined && { description }),
       ...(visible !== undefined && { display_in_showcase: visible }),
       ...(stock !== undefined && { residues: [stock] }),
+      ...(variantImages !== undefined && { images: imageImport(variantImages) }),
+      ...(commonGallery !== undefined && { gallery_common: imageImport(commonGallery) }),
     }],
   });
   if (result.status !== "OK") throw new Error(`Horoshop catalog/import returned ${result.status}`);

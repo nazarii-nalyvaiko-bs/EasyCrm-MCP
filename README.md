@@ -101,14 +101,21 @@ You can configure either platform by omitting the other platform's variables. Fo
 |------|--------------|
 | `shopify_get_info` | Read Shopify store name, domain, plan, currency |
 | `shopify_theme_list` | List Shopify themes |
+| `shopify_theme_active` | Identify the current live MAIN theme |
+| `shopify_theme_import_draft` | Import a theme ZIP as unpublished |
+| `shopify_theme_duplicate_draft` | Copy an existing theme into an unpublished draft |
+| `shopify_theme_publish` | Publish a theme after confirming the current MAIN theme and user approval |
 | `shopify_theme_read_file` | Read a Shopify theme file |
-| `shopify_theme_update_file` | Create or update a Shopify theme file |
+| `shopify_theme_update_file` | Create or update a theme file, with a live-theme guard |
 | `shopify_page_list` | List Shopify pages |
 | `shopify_page_create` | Create a Shopify page |
 | `shopify_page_update` | Update a Shopify page |
 | `shopify_menu_list` | List Shopify menus |
 | `shopify_menu_update` | Replace a Shopify menu |
 | `shopify_product_list/get/create/update/delete` | Manage core product fields |
+| `shopify_product_create_draft_with_images` | Create an unpublished product and submit image URLs, optionally setting its first price |
+| `shopify_product_image_add` | Add images to an existing product |
+| `shopify_product_media_list` | Check image processing status and URLs |
 | `shopify_product_variant_list/update_price` | Read variants and change a price |
 | `shopify_inventory_location_list` | Find inventory locations |
 | `shopify_product_variant_inventory` | Read available quantity by location |
@@ -128,19 +135,29 @@ You can configure either platform by omitting the other platform's variables. Fo
 |------|--------------|
 | `horoshop_category_list` | Read child categories under a parent |
 | `horoshop_product_list` | Read products, optionally filtered by article (SKU) |
-| `horoshop_product_create` | Create a product in a selected category |
-| `horoshop_product_update` | Update an existing product's price, text, visibility, or warehouse stock |
+| `horoshop_product_create` | Create a product in a selected category with optional images |
+| `horoshop_product_update` | Update an existing product's price, text, visibility, warehouse stock, or images |
 | `horoshop_customer_upsert` | Create or update one customer by email |
 | `horoshop_order_list` | Read paged orders with optional date and status filters |
 | `horoshop_order_statuses` | Read configured order status IDs |
 | `horoshop_order_update` | Set one order's status or payment flag |
 | `horoshop_order_summary` | Compute bounded counts and totals from orders in a date range |
 
-Each tool is tied to one configured platform. The Horoshop product tool supports `offset` and `limit` for paging, with a maximum of 500 products per request per the [Horoshop export API](https://horoshop.notion.site/1b6cc289707981e782b6e7c57c2fa526). Horoshop category export requires platform version 4 or later.
+Each tool is tied to one configured platform. Horoshop product creation accepts image URLs for a variant gallery or a shared gallery. Image updates require an explicit append or replace mode; replace removes the existing images in that gallery. Horoshop fetches images from the supplied URLs, with a 5 MB limit for each source image. The product list supports `offset` and `limit` for paging, with a maximum of 500 products per request per the [Horoshop export API](https://horoshop.notion.site/1b6cc289707981e782b6e7c57c2fa526). Horoshop category export requires platform version 4 or later.
 
-Both order summaries are calculated by this server from API orders. They are not native analytics reports or payment revenue. Horoshop scans at most 5,000 orders and reports `complete: false` if more may exist. Its `total_sum` values include discounts and exclude shipping. Shopify reports `paginationComplete` and a cursor if it stops before the last page. `shopify_sales_report` separately uses [Shopify's native ShopifyQL analytics API](https://shopify.dev/docs/api/admin-graphql/latest/queries/shopifyqlQuery).
+Before editing theme files, call `shopify_theme_active` or `shopify_theme_list`. The update tool checks the observed role again. Editing the live MAIN theme requires explicit user approval and `confirmLiveTheme: true`; publishing requires approval, `confirmPublish: true`, and the expected current MAIN theme ID. Draft themes can be edited without changing the live storefront. Shopify requires a [theme API exemption](https://shopify.dev/docs/api/admin-graphql/latest/mutations/themeDuplicate) for theme mutations.
 
-The current tools do not cover every action in either admin. In particular, Shopify refunds, partial fulfillment, edits to line items, advanced discount types, and Horoshop order creation or deletion need separate workflows and API verification. Shopify cancellation returns a job ID because processing is asynchronous. See [the architecture notes](docs/architecture.md) for the extension plan.
+Shopify product images are submitted from public HTTPS URLs. Shopify processes them asynchronously, so use `shopify_product_media_list` to check readiness. Creating a draft with an initial price uses a second mutation for the default variant. If that step fails, the tool returns the created product ID and marks the partial result as an error.
+
+### Analytics
+
+- `shopify_sales_report` reads native Shopify Analytics through [ShopifyQL](https://shopify.dev/docs/api/admin-graphql/latest/queries/shopifyqlQuery). Select a date range, total/daily/monthly interval, and metrics such as sales, orders, discounts, and average order value. This requires `read_reports` and Level 2 protected customer data access.
+- `shopify_order_summary` calculates order counts and current order totals from accessible orders. It reports `paginationComplete` and a cursor when it stops before the last page.
+- `horoshop_order_summary` calculates order counts, paid counts, totals by currency, and breakdowns by status and UTM source from the [Horoshop orders API](https://horoshop.notion.site/1b6cc28970798113b9b3fbd6fe844076). It scans at most 5,000 orders and reports `complete: false` if more may exist.
+
+The two order summaries are calculated from API orders, not native analytics reports or settled payment revenue. Horoshop `total_sum` includes discounts and excludes shipping. The server does not currently expose traffic, sessions, or conversion funnel analytics for Horoshop.
+
+The current tools do not cover every action in either admin. In particular, Shopify refunds, partial fulfillment, edits to line items, advanced discount types, and Horoshop customer deletion or order creation/deletion need separate workflows and API verification. Shopify cancellation returns a job ID because processing is asynchronous. See [the architecture notes](docs/architecture.md) for the extension plan.
 
 ## Moving from the Shopify-only package
 

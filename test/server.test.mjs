@@ -24,7 +24,12 @@ test("registers platform-specific tools for both configured stores", async () =>
     const names = tools.map((tool) => tool.name);
     assert.ok(names.includes("shopify_get_info"));
     assert.ok(names.includes("shopify_theme_update_file"));
+    assert.ok(names.includes("shopify_theme_active"));
+    assert.ok(names.includes("shopify_theme_duplicate_draft"));
+    assert.ok(names.includes("shopify_theme_publish"));
     assert.ok(names.includes("shopify_product_create"));
+    assert.ok(names.includes("shopify_product_create_draft_with_images"));
+    assert.ok(names.includes("shopify_product_media_list"));
     assert.ok(names.includes("shopify_customer_delete"));
     assert.ok(names.includes("shopify_order_delete"));
     assert.ok(names.includes("shopify_order_summary"));

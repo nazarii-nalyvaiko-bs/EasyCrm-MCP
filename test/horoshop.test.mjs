@@ -107,6 +107,77 @@ test("creates a Horoshop product in a selected category after checking the artic
   });
 });
 
+test("creates a Horoshop product with separate variant and common image galleries", async (t) => {
+  const requests = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    requests.push({ url, body: JSON.parse(options.body) });
+    if (url.endsWith("/auth/")) return Response.json({ status: "OK", response: { token: "token" } });
+    if (url.endsWith("/catalog/export/")) return Response.json({ status: "EMPTY" });
+    return Response.json({ status: "OK" });
+  });
+
+  await createProduct(new HoroshopClient(config), {
+    article: "NEW-IMAGE", title: "With photos", categoryId: 8,
+    variantImageUrls: ["https://images.example.com/variant.jpg"],
+    commonGalleryImageUrls: ["https://images.example.com/common.jpg"],
+  });
+  assert.deepEqual(requests[2].body.products[0], {
+    article: "NEW-IMAGE", title: "With photos", parent: { id: 8 },
+    images: { links: ["https://images.example.com/variant.jpg"], override: false },
+    gallery_common: { links: ["https://images.example.com/common.jpg"], override: false },
+  });
+});
+
+test("appends requested product images without removing existing images", async (t) => {
+  const requests = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    requests.push({ url, body: JSON.parse(options.body) });
+    if (url.endsWith("/auth/")) return Response.json({ status: "OK", response: { token: "token" } });
+    if (url.endsWith("/catalog/export/")) return Response.json({ status: "OK", response: { products: [{ article: "SKU-1" }] } });
+    return Response.json({ status: "OK" });
+  });
+
+  await updateProduct(new HoroshopClient(config), {
+    article: "SKU-1", variantImages: { links: ["https://images.example.com/new.jpg"], mode: "append" },
+  });
+  assert.deepEqual(requests[2].body.products[0], {
+    article: "SKU-1", images: { links: ["https://images.example.com/new.jpg"], override: false },
+  });
+});
+
+test("replaces only the explicitly selected product image gallery", async (t) => {
+  const requests = [];
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    requests.push({ url, body: JSON.parse(options.body) });
+    if (url.endsWith("/auth/")) return Response.json({ status: "OK", response: { token: "token" } });
+    if (url.endsWith("/catalog/export/")) return Response.json({ status: "OK", response: { products: [{ article: "SKU-1" }] } });
+    return Response.json({ status: "OK" });
+  });
+
+  await updateProduct(new HoroshopClient(config), {
+    article: "SKU-1", commonGallery: { links: ["https://images.example.com/new.jpg"], mode: "replace" },
+  });
+  assert.deepEqual(requests[2].body.products[0], {
+    article: "SKU-1", gallery_common: { links: ["https://images.example.com/new.jpg"], override: true },
+  });
+  assert.equal("images" in requests[2].body.products[0], false);
+});
+
+test("rejects an empty replacement gallery before importing", async (t) => {
+  const operations = [];
+  t.mock.method(globalThis, "fetch", async (url) => {
+    operations.push(url);
+    return Response.json(url.endsWith("/auth/")
+      ? { status: "OK", response: { token: "token" } }
+      : { status: "OK", response: { products: [{ article: "SKU-1" }] } });
+  });
+
+  await assert.rejects(updateProduct(new HoroshopClient(config), {
+    article: "SKU-1", variantImages: { links: [], mode: "replace" },
+  }), /at least one image URL/);
+  assert.equal(operations.some((url) => url.endsWith("/catalog/import/")), false);
+});
+
 test("does not overwrite a Horoshop product when creating with an existing article", async (t) => {
   const operations = [];
   t.mock.method(globalThis, "fetch", async (url) => {

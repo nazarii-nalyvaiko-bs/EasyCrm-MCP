@@ -8,6 +8,11 @@ import { listOrders, listOrderStatuses, summarizeOrders, updateOrder } from "../
 import { createProduct, listProducts, updateProduct } from "../horoshop/products.js";
 
 const date = z.iso.date();
+const imageUrls = z.array(z.url().refine((value) => /^https?:\/\//.test(value), "Use an HTTP or HTTPS image URL")).min(1);
+const imageUpdate = z.object({
+  links: imageUrls,
+  mode: z.enum(["append", "replace"]).describe("append keeps existing images; replace removes the gallery's existing images before import"),
+});
 
 async function resultOf(operation: () => Promise<unknown>): Promise<CallToolResult> {
   try {
@@ -67,7 +72,7 @@ export function registerHoroshopTools(server: McpServer, client: HoroshopClient)
     "horoshop_product_create",
     {
       title: "Create a Horoshop product",
-      description: "Create a product with a unique article, title, and category ID. Use horoshop_category_list to find the category. Optional fields apply only to the new product.",
+      description: "Create a product with a unique article, title, and category ID. Use horoshop_category_list to find the category. Optional image URLs are fetched by Horoshop in order; each source image must be at most 5 MB. Variant images and the shared gallery are separate.",
       inputSchema: {
         article: z.string().min(1),
         title: z.string().min(1),
@@ -75,6 +80,8 @@ export function registerHoroshopTools(server: McpServer, client: HoroshopClient)
         price: z.number().nonnegative().optional(),
         description: z.string().optional(),
         visible: z.boolean().optional(),
+        variantImageUrls: imageUrls.optional(),
+        commonGalleryImageUrls: imageUrls.optional(),
       },
     },
     (input) => resultOf(() => createProduct(client, input)),
@@ -84,7 +91,7 @@ export function registerHoroshopTools(server: McpServer, client: HoroshopClient)
     "horoshop_product_update",
     {
       title: "Update a Horoshop product",
-      description: "Update an existing Horoshop product by exact article. Only supplied fields are sent. Stock requires warehouse accounting enabled in Horoshop.",
+      description: "Update an existing Horoshop product by exact article. Only supplied fields are sent. Image mode append preserves existing images; replace removes existing images in that gallery before importing the supplied URLs. Horoshop fetches image URLs in order and each source image must be at most 5 MB. Stock requires warehouse accounting enabled in Horoshop.",
       inputSchema: {
         article: z.string().min(1),
         price: z.number().nonnegative().optional(),
@@ -92,6 +99,8 @@ export function registerHoroshopTools(server: McpServer, client: HoroshopClient)
         description: z.string().optional(),
         visible: z.boolean().optional(),
         stock: z.object({ warehouse: z.string().min(1), quantity: z.number().int().nonnegative() }).optional(),
+        variantImages: imageUpdate.optional(),
+        commonGallery: imageUpdate.optional(),
       },
       annotations: { destructiveHint: true },
     },
