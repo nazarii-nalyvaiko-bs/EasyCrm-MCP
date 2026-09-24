@@ -4,12 +4,6 @@ An MCP server for one Shopify store and one Horoshop store. Tools are grouped by
 
 The server runs locally and sends requests directly to each configured platform. Credentials stay in your MCP client configuration on your machine.
 
-## Shopify demo
-
-
-https://github.com/user-attachments/assets/afd71d46-e8d7-4c06-96dc-094cae3fe5a2
-
-
 ## Quick start
 
 https://github.com/user-attachments/assets/175e5051-b6ec-4201-a33e-d27c68356171
