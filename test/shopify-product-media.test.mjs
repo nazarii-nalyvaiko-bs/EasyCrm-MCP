@@ -112,7 +112,7 @@ test("MCP tool validates HTTPS image source before writing", async () => {
   try {
     const tools = await client.listTools();
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
-      "shopify_product_create_draft_with_images", "shopify_product_image_add", "shopify_product_media_list",
+      "shopify_product_create_draft_with_images", "shopify_product_image_add", "shopify_product_image_add_local", "shopify_product_media_list",
     ].sort());
     const response = await client.callTool({
       name: "shopify_product_create_draft_with_images",

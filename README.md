@@ -40,6 +40,7 @@ You need a store on a plan with Admin API access and one of:
    | Resource | Read | Write |
    |----------|------|-------|
    | Themes | `read_themes` | `write_themes` |
+   | Shopify Files for theme media | `read_files` | `write_files` |
    | Pages | `read_content` | `write_content` |
    | Menus | `read_online_store_navigation` | `write_online_store_navigation` |
    | Products and variants | `read_products` | `write_products` |
@@ -101,6 +102,10 @@ You can configure either platform by omitting the other platform's variables. Fo
 | `shopify_theme_publish` | Publish a theme after confirming the current MAIN theme and user approval |
 | `shopify_theme_read_file` | Read a Shopify theme file |
 | `shopify_theme_update_file` | Create or update a theme file, with a live-theme guard |
+| `shopify_theme_media_slots` | Find image and video picker settings in a theme JSON template, section group, or global settings |
+| `shopify_theme_media_upload_local` | Upload a local image or MP4 video into Shopify Files |
+| `shopify_theme_media_file_status` | Check media processing and get its theme reference |
+| `shopify_theme_media_set` | Fill or replace one selected theme media setting with a ready file |
 | `shopify_page_list` | List Shopify pages |
 | `shopify_page_create` | Create a Shopify page |
 | `shopify_page_update` | Update a Shopify page |
@@ -109,6 +114,7 @@ You can configure either platform by omitting the other platform's variables. Fo
 | `shopify_product_list/get/create/update/delete` | Manage core product fields |
 | `shopify_product_create_draft_with_images` | Create an unpublished product and submit image URLs, optionally setting its first price |
 | `shopify_product_image_add` | Add images to an existing product |
+| `shopify_product_image_add_local` | Upload a local image and attach it to an existing product |
 | `shopify_product_media_list` | Check image processing status and URLs |
 | `shopify_product_variant_list/update_price` | Read variants and change a price |
 | `shopify_inventory_location_list` | Find inventory locations |
@@ -147,7 +153,9 @@ Each tool is tied to one configured platform. Horoshop product creation accepts 
 
 Before editing theme files, call `shopify_theme_active` or `shopify_theme_list`. The update tool checks the observed role again. Editing the live MAIN theme requires explicit user approval and `confirmLiveTheme: true`; publishing requires approval, `confirmPublish: true`, and the expected current MAIN theme ID. Draft themes can be edited without changing the live storefront. Shopify requires a [theme API exemption](https://shopify.dev/docs/api/admin-graphql/latest/mutations/themeDuplicate) for theme mutations.
 
-Shopify product images are submitted from public HTTPS URLs. Shopify processes them asynchronously, so use `shopify_product_media_list` to check readiness. Creating a draft with an initial price uses a second mutation for the default variant. If that step fails, the tool returns the created product ID and marks the partial result as an error.
+To change a theme banner image or video, inspect its settings with `shopify_theme_media_slots` using the relevant template path, for example `templates/index.json`. The result identifies section, block, and setting IDs, including empty media pickers. Upload a local file with `shopify_theme_media_upload_local`, wait for `shopify_theme_media_file_status` to report `READY`, then call `shopify_theme_media_set` with the returned file ID and the slot's observed value. The setter checks the theme schema and current value again, and changes only that setting. Images may be PNG, JPEG, WebP, or GIF up to 20 MB. Video upload currently supports MP4 up to 1 GB and streams the local file. The file path is read on the machine running the MCP server. `video_url` settings for YouTube or Vimeo are separate from Shopify-hosted `video` pickers and are not handled by this flow. A concurrent Theme Editor save during the final theme file write can still overwrite changes because Shopify does not offer an atomic compare-and-swap for theme JSON files.
+
+Shopify product images can be submitted from public HTTPS URLs or local files. The local-image tool accepts an absolute path on the MCP server machine and uploads one PNG, JPEG, WebP, or GIF up to 20 MB through Shopify staging before attaching it to the product. Shopify processes images asynchronously, so use `shopify_product_media_list` to check readiness. Creating a draft with an initial price uses a second mutation for the default variant. If that step fails, the tool returns the created product ID and marks the partial result as an error.
 
 ### Analytics
 
