@@ -2,7 +2,7 @@ export type AuthConfig =
   | { mode: "accessToken"; accessToken: string }
   | { mode: "clientCredentials"; clientId: string; clientSecret: string };
 
-export interface Config {
+export interface ShopifyConfig {
   storeDomain: string;
   auth: AuthConfig;
 }
@@ -12,9 +12,11 @@ const AUTH_SETUP_HINT =
   "(Shopify Dev Dashboard → your app → Client credentials).";
 
 export function normalizeStoreDomain(input: string): string {
-  const host = input.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-  if (host === "" || host.endsWith(".myshopify.com")) return host;
-  return `${host.split(".")[0]}.myshopify.com`;
+  const value = input.trim().toLowerCase();
+  const host = value.startsWith("https://") ? value.slice("https://".length) : value;
+  if (/^[a-z0-9][a-z0-9-]*$/.test(host)) return `${host}.myshopify.com`;
+  if (/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(host)) return host;
+  throw new Error("SHOPIFY_STORE_DOMAIN must be a myshopify.com domain or store subdomain");
 }
 
 function loadAuthConfig(): AuthConfig {
@@ -28,13 +30,13 @@ function loadAuthConfig(): AuthConfig {
   throw new Error(`Missing Shopify credentials. ${AUTH_SETUP_HINT}`);
 }
 
-export function loadConfig(): Config {
+export function loadShopifyConfig(): ShopifyConfig {
   const storeDomain = process.env.SHOPIFY_STORE_DOMAIN;
   if (!storeDomain) throw new Error("Missing required env var: SHOPIFY_STORE_DOMAIN");
   return { storeDomain: normalizeStoreDomain(storeDomain), auth: loadAuthConfig() };
 }
 
-export function toEnv(config: Config): Record<string, string> {
+export function toShopifyEnv(config: ShopifyConfig): Record<string, string> {
   const auth: Record<string, string> =
     config.auth.mode === "accessToken"
       ? { SHOPIFY_ADMIN_ACCESS_TOKEN: config.auth.accessToken }
@@ -44,7 +46,7 @@ export function toEnv(config: Config): Record<string, string> {
 
 const SECRET_PLACEHOLDER = "<paste the real value here — never share it>";
 
-export function toMaskedEnv(config: Config): Record<string, string> {
+export function toMaskedShopifyEnv(config: ShopifyConfig): Record<string, string> {
   const auth: Record<string, string> =
     config.auth.mode === "accessToken"
       ? { SHOPIFY_ADMIN_ACCESS_TOKEN: SECRET_PLACEHOLDER }

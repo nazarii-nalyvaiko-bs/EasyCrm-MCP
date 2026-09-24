@@ -1,24 +1,29 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Config } from "./config.js";
+import type { AppConfig } from "./app-config.js";
+import { HoroshopClient } from "./horoshop/client.js";
 import { SERVER_NAME, VERSION } from "./identity.js";
-import type { TokenProvider } from "./shopify/auth/auth.js";
+import { createTokenProvider } from "./shopify/auth/auth.js";
 import { ShopifyClient } from "./shopify/client.js";
-import { registerShopTools } from "./tools/shop.js";
+import { registerHoroshopTools } from "./tools/horoshop.js";
+import { registerShopTools } from "./tools/shopify.js";
 
 const SERVER_INSTRUCTIONS =
-  "Tools operate on one Shopify store via the Admin API. Authentication is automatic: " +
-  "access tokens are exchanged and refreshed from the configured credentials. If a tool " +
-  "reports a failed credential exchange or a missing API scope, the user must fix it in " +
-  "the Shopify Dev Dashboard or their MCP configuration — no tool can do it for them.";
+  "Tools are prefixed by platform and operate only on the configured store for that platform. " +
+  "Shopify and Horoshop authentication is automatic. If credentials or API permissions fail, " +
+  "the user must update the store configuration.";
 
-export function createServer(config: Config, tokenProvider: TokenProvider): McpServer {
+export function createServer(config: AppConfig): McpServer {
   const server = new McpServer(
     { name: SERVER_NAME, version: VERSION },
     { instructions: SERVER_INSTRUCTIONS },
   );
-  const shopify = new ShopifyClient(config, tokenProvider);
-
-  registerShopTools(server, shopify);
+  if (config.shopify) {
+    const tokenProvider = createTokenProvider(config.shopify.storeDomain, config.shopify.auth);
+    registerShopTools(server, new ShopifyClient(config.shopify, tokenProvider));
+  }
+  if (config.horoshop) {
+    registerHoroshopTools(server, new HoroshopClient(config.horoshop));
+  }
 
   return server;
 }

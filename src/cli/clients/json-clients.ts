@@ -7,8 +7,9 @@ async function readJsonFile(filePath: string): Promise<Record<string, unknown>> 
   let text: string;
   try {
     text = await fs.readFile(filePath, "utf8");
-  } catch {
-    return {};
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+    throw error;
   }
   return JSON.parse(text) as Record<string, unknown>;
 }
@@ -18,7 +19,7 @@ async function upsertServerEntry(filePath: string, rootKey: string, entry: unkno
   const servers = (root[rootKey] ??= {}) as Record<string, unknown>;
   servers[SERVER_NAME] = entry;
   await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, `${JSON.stringify(root, null, 2)}\n`);
+  await fs.writeFile(filePath, `${JSON.stringify(root, null, 2)}\n`, { mode: 0o600 });
 }
 
 export interface JsonFileTarget {
