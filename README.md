@@ -115,7 +115,9 @@ You can configure either platform by omitting the other platform's variables. Fo
 | `shopify_product_variant_inventory` | Read available quantity by location |
 | `shopify_inventory_set_available` | Set available quantity with a comparison value and idempotency key |
 | `shopify_customer_list/get/create/update/delete` | Manage customer profiles |
+| `shopify_customer_purchase_history` | Read a customer's orders and purchased items by customer ID |
 | `shopify_order_list/get/create/update/delete/cancel` | Manage orders within Shopify's operation rules |
+| `shopify_order_line_items` | Page through purchased items in one order |
 | `shopify_order_fulfillment_orders` | Find fulfillable units for an order |
 | `shopify_fulfillment_create` | Fulfill one entire fulfillment order |
 | `shopify_order_summary` | Compute a bounded order summary from accessible orders |
@@ -132,6 +134,7 @@ You can configure either platform by omitting the other platform's variables. Fo
 | `horoshop_product_create` | Create a product in a selected category with optional images |
 | `horoshop_product_update` | Update an existing product's price, text, visibility, warehouse stock, or images |
 | `horoshop_customer_upsert` | Create or update one customer by email |
+| `horoshop_customer_purchase_history` | Find orders and purchased products by delivery email |
 | `horoshop_order_list` | Read paged orders with optional date and status filters |
 | `horoshop_order_statuses` | Read configured order status IDs |
 | `horoshop_order_update` | Set one order's status or payment flag |
@@ -150,6 +153,12 @@ Shopify product images are submitted from public HTTPS URLs. Shopify processes t
 - `horoshop_order_summary` calculates order counts, paid counts, totals by currency, and breakdowns by status and UTM source from the [Horoshop orders API](https://horoshop.notion.site/1b6cc28970798113b9b3fbd6fe844076). Currency totals are exact decimal strings, for example `"0.3"`. It scans at most 5,000 orders and reports `complete: false` if more may exist.
 
 The two order summaries are calculated from API orders, not native analytics reports or settled payment revenue. Horoshop `total_sum` includes discounts and excludes shipping. The server does not currently expose traffic, sessions, or conversion funnel analytics for Horoshop.
+
+### Purchase history
+
+Both purchase history tools read store data through the configured API connection. Shopify searches orders by customer ID, newest first, and returns an order cursor for the next page. Each order includes up to 20 line items; when `itemsComplete` is false, pass `nextItemsCursor` and the order ID to `shopify_order_line_items` to read more. Shopify normally limits order access to the most recent 60 days unless the app has `read_all_orders`.
+
+Horoshop has no documented customer filter for `orders/get`, so `horoshop_customer_purchase_history` scans up to `maxPages` pages of 100 orders, matching `delivery_email` exactly without regard to letter case. Use `from` and `to` to narrow the search. If `complete` is false, pass `nextOffset` as `offset` in another call to continue. An empty result with `complete: false` does not establish that the customer has no earlier purchases.
 
 The current tools do not cover every action in either admin. In particular, Shopify refunds, partial fulfillment, edits to line items, advanced discount types, and Horoshop customer deletion or order creation/deletion need separate workflows and API verification. Shopify cancellation returns a job ID because processing is asynchronous. See [the architecture notes](docs/architecture.md) for the extension plan.
 

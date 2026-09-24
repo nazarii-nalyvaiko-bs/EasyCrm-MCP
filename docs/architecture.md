@@ -31,6 +31,8 @@ The Shopify client owns GraphQL transport and token refresh. Each resource modul
 
 Order summaries page through accessible orders and report whether they reached the last page. They are derived metrics, not native reports. Horoshop order value is grouped by currency and uses `total_sum`, which excludes shipping. Shopify uses the current order total after returns and omits cancelled and test orders from the amount. Neither metric should be presented as settled revenue. The separate Shopify sales report uses native ShopifyQL, with a fixed metric allowlist, date range, and explicit row limit.
 
+Purchase history is read from orders with provider-specific lookup. Shopify filters by customer ID and exposes separate cursors for orders and line items. Horoshop's documented order list has no customer filter, so it scans bounded pages and matches the delivery email. The result reports whether the scan reached the end and where to resume. Neither provider returns a combined cross-store customer identity.
+
 Mutation responses are not treated as success solely because HTTP succeeded. Shopify `userErrors` and Horoshop `WARNING` or per-record errors fail the tool call. Async Shopify cancellation returns a job ID and a state that says processing was accepted.
 
 Shopify reports the current live theme as `MAIN`. Theme file updates check the role immediately before mutation. A MAIN update requires an explicit confirmation flag. Theme publishing first compares the active theme ID with the ID the user reviewed, then requires a separate confirmation flag. Shopify has no atomic expected-MAIN condition, so a simultaneous publication by another actor remains possible between the check and mutation.
