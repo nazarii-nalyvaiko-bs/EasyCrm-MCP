@@ -92,6 +92,8 @@ You can configure either platform by omitting the other platform's variables. Fo
 
 Each tool is tied to one configured platform. The Horoshop product tool supports `offset` and `limit` for paging, with a maximum of 500 products per request per the [Horoshop export API](https://horoshop.notion.site/1b6cc289707981e782b6e7c57c2fa526).
 
+See [the architecture notes](docs/architecture.md) for module boundaries and planned increments.
+
 ## Moving from the Shopify-only package
 
 The previously published `shopify-store-builder-mcp` package remains available. To use this package, replace the npm command with `easycrm-mcp`, use the new `easycrm` MCP entry, and update tool names to their `shopify_` versions. Horoshop variables can then be added to the same entry.
