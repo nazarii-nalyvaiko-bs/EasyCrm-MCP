@@ -1,6 +1,6 @@
 # EasyCRM MCP
 
-An MCP server for managing one Shopify store and one Horoshop store. Shopify tools manage themes, pages, and menus. The first Horoshop tool reads products; order, stock, and content tools can be added as separate provider modules.
+An MCP server for one Shopify store and one Horoshop store. Tools are grouped by platform and resource so each action has a clear destination and input contract.
 
 The server runs locally and sends requests directly to each configured platform. Credentials stay in your MCP client configuration on your machine.
 
@@ -17,6 +17,8 @@ https://github.com/user-attachments/assets/175e5051-b6ec-4201-a33e-d27c68356171
 ```bash
 npx -y easycrm-mcp init
 ```
+
+The renamed npm package is not published yet. Until it is published, run `npm install` and `npm run dev -- init` from this repository.
 
 The wizard lets you configure Shopify, Horoshop, or both. It verifies each connection and registers the server in the client you pick:
 
@@ -39,7 +41,21 @@ You need a store on a plan with Admin API access and one of:
 **Option A: Dev Dashboard app (for stores in your own Shopify organization)**
 
 1. Go to [dev.shopify.com/dashboard](https://dev.shopify.com/dashboard) and create an app for a store in your organization. [Shopify limits client credentials to stores in your own organization](https://shopify.dev/docs/apps/build/authentication-authorization/access-tokens).
-2. Grant it the scopes: `read_themes`, `write_themes`, `read_content`, `write_content`, `read_online_store_navigation`, `write_online_store_navigation`.
+2. Grant only the scopes needed for the tools you plan to use:
+
+   | Resource | Read | Write |
+   |----------|------|-------|
+   | Themes | `read_themes` | `write_themes` |
+   | Pages | `read_content` | `write_content` |
+   | Menus | `read_online_store_navigation` | `write_online_store_navigation` |
+   | Products and variants | `read_products` | `write_products` |
+   | Inventory | `read_inventory`, `read_locations` | `write_inventory` |
+   | Customers | `read_customers` | `write_customers` |
+   | Orders | `read_orders` | `write_orders` |
+   | Fulfillment orders | Matching assigned, merchant-managed, or third-party fulfillment read scope | Matching fulfillment write scope |
+   | Discounts | `read_discounts` | `write_discounts` |
+
+   Shopify customer data also requires protected customer data approval. Orders older than 60 days normally require `read_all_orders`. Some actions require additional staff permissions or an offline token. The individual tool descriptions state these cases.
 3. Copy the Client ID and Client Secret from the app's settings.
 
 **Option B: existing admin access token**
@@ -77,6 +93,8 @@ You can configure either platform by omitting the other platform's variables. Fo
 
 ## Tools
 
+### Shopify
+
 | Tool | What it does |
 |------|--------------|
 | `shopify_get_info` | Read Shopify store name, domain, plan, currency |
@@ -88,11 +106,37 @@ You can configure either platform by omitting the other platform's variables. Fo
 | `shopify_page_update` | Update a Shopify page |
 | `shopify_menu_list` | List Shopify menus |
 | `shopify_menu_update` | Replace a Shopify menu |
-| `horoshop_product_list` | Read Horoshop products, optionally filtered by article (SKU) |
+| `shopify_product_list/get/create/update/delete` | Manage core product fields |
+| `shopify_product_variant_list/update_price` | Read variants and change a price |
+| `shopify_inventory_location_list` | Find inventory locations |
+| `shopify_product_variant_inventory` | Read available quantity by location |
+| `shopify_inventory_set_available` | Set available quantity with a comparison value and idempotency key |
+| `shopify_customer_list/get/create/update/delete` | Manage customer profiles |
+| `shopify_order_list/get/create/update/delete/cancel` | Manage orders within Shopify's operation rules |
+| `shopify_order_fulfillment_orders` | Find fulfillable units for an order |
+| `shopify_fulfillment_create` | Fulfill one entire fulfillment order |
+| `shopify_order_summary` | Compute a bounded order summary from accessible orders |
+| `shopify_discount_code_list/create/update/delete` | Manage basic code discounts |
+| `shopify_discount_automatic_list/create/update/delete` | Manage basic automatic discounts |
 
-Each tool is tied to one configured platform. The Horoshop product tool supports `offset` and `limit` for paging, with a maximum of 500 products per request per the [Horoshop export API](https://horoshop.notion.site/1b6cc289707981e782b6e7c57c2fa526).
+### Horoshop
 
-See [the architecture notes](docs/architecture.md) for module boundaries and planned increments.
+| Tool | What it does |
+|------|--------------|
+| `horoshop_category_list` | Read child categories under a parent |
+| `horoshop_product_list` | Read products, optionally filtered by article (SKU) |
+| `horoshop_product_update` | Update an existing product's price, text, visibility, or warehouse stock |
+| `horoshop_customer_upsert` | Create or update one customer by email |
+| `horoshop_order_list` | Read paged orders with optional date and status filters |
+| `horoshop_order_statuses` | Read configured order status IDs |
+| `horoshop_order_update` | Set one order's status or payment flag |
+| `horoshop_order_summary` | Compute bounded counts and totals from orders in a date range |
+
+Each tool is tied to one configured platform. The Horoshop product tool supports `offset` and `limit` for paging, with a maximum of 500 products per request per the [Horoshop export API](https://horoshop.notion.site/1b6cc289707981e782b6e7c57c2fa526). Horoshop category export requires platform version 4 or later.
+
+Both order summaries are calculated by this server from API orders. They are not native analytics reports or payment revenue. Horoshop scans at most 5,000 orders and reports `complete: false` if more may exist. Its `total_sum` values include discounts and exclude shipping. Shopify reports `paginationComplete` and a cursor if it stops before the last page.
+
+The current tools do not cover every action in either admin. In particular, Shopify refunds, partial fulfillment, edits to line items, advanced discount types, and Horoshop order creation or deletion need separate workflows and API verification. Shopify cancellation returns a job ID because processing is asynchronous. See [the architecture notes](docs/architecture.md) for the extension plan.
 
 ## Moving from the Shopify-only package
 

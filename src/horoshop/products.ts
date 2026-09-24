@@ -14,16 +14,50 @@ export async function listProducts(
   client: HoroshopClient,
   search: ProductSearch,
 ): Promise<HoroshopProduct[]> {
-  const response = await client.request<{ products: unknown[] }>("catalog/export", {
+  const result = await client.request("catalog/export", {
     offset: search.offset,
     limit: search.limit,
     ...(search.article && { expr: { article: search.article } }),
   });
-  if (response === null) return [];
-  if (!Array.isArray(response.products) || response.products.some((product) =>
+  if (result.status === "EMPTY") return [];
+  if (result.status !== "OK") throw new Error(`Horoshop catalog/export returned ${result.status}`);
+  const response = result.response;
+  if (!response || typeof response !== "object" || !("products" in response) || !Array.isArray(response.products) || response.products.some((product) =>
     !product || typeof product !== "object" || !("article" in product) || typeof product.article !== "string"
   )) {
     throw new Error("Horoshop catalog/export returned an invalid product list");
   }
   return response.products as HoroshopProduct[];
+}
+
+export interface ProductUpdate {
+  article: string;
+  price?: number;
+  title?: string;
+  description?: string;
+  visible?: boolean;
+  stock?: { warehouse: string; quantity: number };
+}
+
+export async function updateProduct(client: HoroshopClient, update: ProductUpdate): Promise<{ article: string; updated: true }> {
+  const { article, price, title, description, visible, stock } = update;
+  if ([price, title, description, visible, stock].every((value) => value === undefined)) {
+    throw new Error("Provide at least one product field to update");
+  }
+  const existing = await listProducts(client, { article, offset: 0, limit: 2 });
+  if (!existing.some((product) => product.article === article)) {
+    throw new Error(`Horoshop product ${article} was not found; product creation requires category and title`);
+  }
+  const result = await client.request("catalog/import", {
+    products: [{
+      article,
+      ...(price !== undefined && { price }),
+      ...(title !== undefined && { title }),
+      ...(description !== undefined && { description }),
+      ...(visible !== undefined && { display_in_showcase: visible }),
+      ...(stock !== undefined && { residues: [stock] }),
+    }],
+  });
+  if (result.status !== "OK") throw new Error(`Horoshop catalog/import returned ${result.status}`);
+  return { article, updated: true };
 }

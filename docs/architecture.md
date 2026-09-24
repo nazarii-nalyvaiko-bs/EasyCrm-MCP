@@ -2,7 +2,7 @@
 
 ## Scope
 
-One local MCP process can connect to one Shopify store, one Horoshop store, or both. Each tool belongs to exactly one platform and has a platform prefix. The first release keeps the existing Shopify capabilities and adds Horoshop product reads. Further operations are added by provider and use case.
+One local MCP process can connect to one Shopify store, one Horoshop store, or both. Each tool belongs to exactly one platform and has a platform prefix. Resource operations are narrow and use the platform's native schema.
 
 ## Module boundaries
 
@@ -18,26 +18,35 @@ flowchart LR
 ```
 
 - `src/app-config.ts` selects configured platforms and combines only their environment variables.
-- `src/shopify/` owns Shopify domain validation, token exchange, GraphQL transport, and operations grouped by resource.
-- `src/horoshop/` owns HTTPS origin validation, 600-second token renewal, JSON API transport, and Horoshop operations.
+- `src/shopify/` owns Shopify domain validation, token exchange, GraphQL transport, and operations grouped by theme, page, menu, product, variant, customer, order, and discount.
+- `src/horoshop/` owns HTTPS origin validation, 600-second token renewal, JSON API transport, and operations grouped by product, category, customer, and order.
 - `src/tools/` exposes typed MCP tools. A tool calls only its matching platform client.
 - `src/cli/` configures and checks each store separately, then writes one MCP client entry.
 
-There is no shared commerce interface yet. Shopify themes and Horoshop products have different data shapes and permissions. A common contract should be introduced only for a concrete workflow that actually needs both stores, such as a read-only stock comparison.
+There is no shared commerce interface yet. The providers use different IDs, fields, status models, and permissions. A common contract should be introduced for a concrete workflow that needs both stores, such as a read-only stock comparison.
+
+## API and analytics boundaries
+
+The Shopify client owns GraphQL transport and token refresh. Each resource module owns its query or mutation, typed input, response checks, and API error interpretation. Horoshop follows the same split with JSON POST, a cached token, and operation-specific response validation. MCP tool modules own user-facing schemas and descriptions; they do not build raw requests.
+
+Order summaries page through accessible orders and report whether they reached the last page. They are derived metrics, not native reports. Horoshop order value is grouped by currency and uses `total_sum`, which excludes shipping. Shopify uses the current order total after returns and omits cancelled and test orders from the amount. Neither metric should be presented as settled revenue.
+
+Mutation responses are not treated as success solely because HTTP succeeded. Shopify `userErrors` and Horoshop `WARNING` or per-record errors fail the tool call. Async Shopify cancellation returns a job ID and a state that says processing was accepted.
 
 ## Operational rules
 
 1. Keep credentials in the local MCP client configuration. Never return a token or password through a tool result.
 2. Prefix every tool with `shopify_` or `horoshop_` so the destination is clear before an agent calls it.
 3. Validate store origins before making network requests. Horoshop requires an HTTPS origin; Shopify requires a `myshopify.com` domain.
-4. Mark read tools as read-only and mark overwrite or replace tools as destructive.
+4. Mark read tools as read-only and irreversible writes as destructive. A write tool must make its replacement semantics clear in its description.
 5. Add narrow, typed operations for each API method. Do not expose an arbitrary API-call tool.
-6. Page large collections. Horoshop product export accepts at most 500 records per request.
-7. Test authentication, failure responses, and routing without real credentials. Verify real-store behavior separately before release.
+6. Page large collections. Report when an aggregate stops before all pages are read. Horoshop product export accepts at most 500 records per request.
+7. Treat API warnings and per-record errors as failures. Confirm mutations from their returned payloads before reporting success.
+8. Test authentication, failure responses, and routing without real credentials. Verify real-store behavior separately before release.
 
 ## Next increments
 
-1. Verify both configured stores with read-only calls, including an empty Horoshop catalog and an expired token.
-2. Add provider-specific product and inventory reads, then a read-only comparison by SKU with explicit handling for missing or duplicate SKUs.
-3. Add orders and customers using each platform's native fields and pagination.
-4. Add narrow write tools only after defining their exact update semantics, required permissions, and a safe way to review the target store and record.
+1. Verify current tools against test stores, including Horoshop import responses, Shopify app scopes, pagination, and permission failures. Automated tests use mocked API responses and do not establish live-store behavior.
+2. Add cross-store stock and order comparison using explicit SKU and currency rules.
+3. Add Shopify order edit, refund, partial fulfillment, and advanced discount workflows as separate modules with their own permission and confirmation rules.
+4. Add Horoshop customer reads and any additional order or content operations only where documented by the store's API. Do not infer endpoints from admin UI capabilities.

@@ -53,8 +53,10 @@ export async function updateThemeFile(
   );
   const { upsertedThemeFiles, job, userErrors } = data.themeFilesUpsert;
   if (userErrors.length > 0) throw new ShopifyUserError("themeFilesUpsert", userErrors);
+  const filename = upsertedThemeFiles?.[0]?.filename;
+  if (!filename && !job?.id) throw new Error("Shopify did not confirm the theme file update");
   return {
-    filename: upsertedThemeFiles?.[0]?.filename ?? input.filePath,
+    filename: filename ?? input.filePath,
     jobId: job?.id ?? null,
   };
 }

@@ -1,11 +1,25 @@
 import type { HoroshopConfig } from "./config.js";
 
-interface ApiEnvelope<T> {
+interface ApiEnvelope {
   status: string;
-  response?: T & { message?: string };
+  response?: unknown;
 }
 
-type HoroshopOperation = "catalog/export";
+export type HoroshopOperation =
+  | "catalog/export"
+  | "catalog/import"
+  | "pages/export"
+  | "users/import"
+  | "orders/get"
+  | "orders/get_available_statuses"
+  | "orders/update";
+
+function responseMessage(response: unknown): string | undefined {
+  if (response && typeof response === "object" && "message" in response && typeof response.message === "string") {
+    return response.message;
+  }
+  return undefined;
+}
 
 export class HoroshopApiError extends Error {
   constructor(operation: string, status: string, detail?: string) {
@@ -24,35 +38,42 @@ export class HoroshopClient {
 
   constructor(private readonly config: HoroshopConfig) {}
 
-  async request<T>(operation: HoroshopOperation, parameters: Record<string, unknown> = {}): Promise<T | null> {
+  async request(operation: HoroshopOperation, parameters: Record<string, unknown> = {}): Promise<ApiEnvelope> {
     const payload = { ...parameters, token: await this.getToken() };
-    let result = await this.post<T>(operation, payload);
+    let result = await this.post(operation, payload);
     if (result.status === "UNAUTHORIZED") {
       this.invalidateToken();
-      result = await this.post<T>(operation, { ...parameters, token: await this.getToken() });
+      result = await this.post(operation, { ...parameters, token: await this.getToken() });
     }
-    if (result.status === "EMPTY") return null;
-    if (result.status !== "OK" || !result.response) {
-      throw new HoroshopApiError(operation, result.status, result.response?.message);
+    if (result.status !== "OK" && result.status !== "EMPTY" && result.status !== "WARNING") {
+      throw new HoroshopApiError(operation, result.status, responseMessage(result.response));
     }
-    return result.response;
+    return result;
   }
 
   private async getToken(): Promise<string> {
     if (this.token && Date.now() < this.tokenExpiresAt - TOKEN_REFRESH_BUFFER_MS) {
       return this.token;
     }
-    this.authInFlight ??= this.post<{ token: string }>("auth", {
+    this.authInFlight ??= this.post("auth", {
       login: this.config.login,
       password: this.config.password,
     })
       .then((result) => {
-        if (result.status !== "OK" || !result.response?.token) {
-          throw new HoroshopApiError("auth", result.status, result.response?.message);
+        const response = result.response;
+        if (
+          result.status !== "OK" ||
+          !response ||
+          typeof response !== "object" ||
+          !("token" in response) ||
+          typeof response.token !== "string" ||
+          response.token === ""
+        ) {
+          throw new HoroshopApiError("auth", result.status, responseMessage(response));
         }
-        this.token = result.response.token;
+        this.token = response.token;
         this.tokenExpiresAt = Date.now() + TOKEN_LIFETIME_MS;
-        return this.token;
+        return response.token;
       })
       .finally(() => { this.authInFlight = null; });
     return this.authInFlight;
@@ -63,7 +84,7 @@ export class HoroshopClient {
     this.tokenExpiresAt = 0;
   }
 
-  private async post<T>(operation: string, payload: Record<string, unknown>): Promise<ApiEnvelope<T>> {
+  private async post(operation: HoroshopOperation | "auth", payload: Record<string, unknown>): Promise<ApiEnvelope> {
     const response = await fetch(`${this.config.baseUrl}/api/${operation}/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -75,6 +96,6 @@ export class HoroshopClient {
     if (!result || typeof result !== "object" || !("status" in result) || typeof result.status !== "string") {
       throw new HoroshopApiError(operation, "INVALID_RESPONSE");
     }
-    return result as ApiEnvelope<T>;
+    return result as ApiEnvelope;
   }
 }

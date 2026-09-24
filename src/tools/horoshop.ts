@@ -1,10 +1,53 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { listCategories } from "../horoshop/categories.js";
 import type { HoroshopClient } from "../horoshop/client.js";
-import { listProducts } from "../horoshop/products.js";
+import { upsertCustomer } from "../horoshop/customers.js";
+import { listOrders, listOrderStatuses, summarizeOrders, updateOrder } from "../horoshop/orders.js";
+import { listProducts, updateProduct } from "../horoshop/products.js";
+
+const date = z.iso.date();
+
+async function resultOf(operation: () => Promise<unknown>): Promise<CallToolResult> {
+  try {
+    return { content: [{ type: "text", text: JSON.stringify(await operation(), null, 2) }] };
+  } catch (error) {
+    return {
+      content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
+      isError: true,
+    };
+  }
+}
 
 export function registerHoroshopTools(server: McpServer, client: HoroshopClient): void {
+  server.registerTool(
+    "horoshop_category_list",
+    {
+      title: "List Horoshop categories",
+      description: "Read child catalog categories under a parent category. Use parent=0 for root categories. Requires Horoshop 4 or later.",
+      inputSchema: { parent: z.number().int().min(0).default(0) },
+      annotations: { readOnlyHint: true },
+    },
+    (input) => resultOf(async () => ({ categories: await listCategories(client, input.parent) })),
+  );
+
+  server.registerTool(
+    "horoshop_customer_upsert",
+    {
+      title: "Create or update a Horoshop customer",
+      description: "Import one customer by unique email. An existing customer with that email may be updated. Only supplied profile fields are sent.",
+      inputSchema: {
+        name: z.string().min(1),
+        email: z.email(),
+        phone: z.string().min(1).optional(),
+        note: z.string().optional(),
+      },
+      annotations: { destructiveHint: true },
+    },
+    (input) => resultOf(() => upsertCustomer(client, input)),
+  );
+
   server.registerTool(
     "horoshop_product_list",
     {
@@ -17,16 +60,90 @@ export function registerHoroshopTools(server: McpServer, client: HoroshopClient)
       },
       annotations: { readOnlyHint: true },
     },
-    async (input): Promise<CallToolResult> => {
-      try {
-        const products = await listProducts(client, input);
-        return { content: [{ type: "text", text: JSON.stringify({ products, offset: input.offset, limit: input.limit }, null, 2) }] };
-      } catch (error) {
-        return {
-          content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
-          isError: true,
-        };
-      }
+    (input) => resultOf(async () => ({ products: await listProducts(client, input), offset: input.offset, limit: input.limit })),
+  );
+
+  server.registerTool(
+    "horoshop_product_update",
+    {
+      title: "Update a Horoshop product",
+      description: "Update an existing Horoshop product by exact article. Only supplied fields are sent. Stock requires warehouse accounting enabled in Horoshop.",
+      inputSchema: {
+        article: z.string().min(1),
+        price: z.number().nonnegative().optional(),
+        title: z.string().min(1).optional(),
+        description: z.string().optional(),
+        visible: z.boolean().optional(),
+        stock: z.object({ warehouse: z.string().min(1), quantity: z.number().int().nonnegative() }).optional(),
+      },
+      annotations: { destructiveHint: true },
     },
+    (input) => resultOf(() => updateProduct(client, input)),
+  );
+
+  server.registerTool(
+    "horoshop_order_list",
+    {
+      title: "List Horoshop orders",
+      description: "Read a page of Horoshop orders. Results can include customer and delivery data.",
+      inputSchema: {
+        from: date.optional(),
+        to: date.optional(),
+        status: z.number().int().optional(),
+        offset: z.number().int().min(0).default(0),
+        limit: z.number().int().min(1).max(100).default(20),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    (input) => resultOf(async () => {
+      if (input.from && input.to && input.from > input.to) throw new Error("from must be on or before to");
+      return { orders: await listOrders(client, input), offset: input.offset, limit: input.limit };
+    }),
+  );
+
+  server.registerTool(
+    "horoshop_order_statuses",
+    {
+      title: "List Horoshop order statuses",
+      description: "Read the status IDs configured for the Horoshop store.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    () => resultOf(async () => ({ statuses: await listOrderStatuses(client) })),
+  );
+
+  server.registerTool(
+    "horoshop_order_update",
+    {
+      title: "Update a Horoshop order",
+      description: "Update one order's status or payment flag. Use horoshop_order_statuses to identify a valid status ID.",
+      inputSchema: {
+        orderId: z.number().int().positive(),
+        status: z.number().int().positive().optional(),
+        paid: z.boolean().optional(),
+      },
+      annotations: { destructiveHint: true },
+    },
+    (input) => resultOf(async () => {
+      if (input.status !== undefined) {
+        const statuses = await listOrderStatuses(client);
+        if (!statuses.some((status) => status.id === input.status)) throw new Error("Status is not available in this Horoshop store");
+      }
+      return updateOrder(client, input);
+    }),
+  );
+
+  server.registerTool(
+    "horoshop_order_summary",
+    {
+      title: "Summarize Horoshop orders",
+      description: "Calculate order counts, paid counts, order value by currency, status counts, and UTM source counts from orders in a date range. This is derived from orders, not a native analytics report. At most 5,000 orders are scanned; complete=false means more may exist. Order totals include discounts but exclude shipping.",
+      inputSchema: { from: date, to: date },
+      annotations: { readOnlyHint: true },
+    },
+    (input) => resultOf(async () => {
+      if (input.from > input.to) throw new Error("from must be on or before to");
+      return summarizeOrders(client, input.from, input.to);
+    }),
   );
 }

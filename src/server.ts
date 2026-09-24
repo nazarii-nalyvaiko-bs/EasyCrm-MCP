@@ -5,6 +5,9 @@ import { SERVER_NAME, VERSION } from "./identity.js";
 import { createTokenProvider } from "./shopify/auth/auth.js";
 import { ShopifyClient } from "./shopify/client.js";
 import { registerHoroshopTools } from "./tools/horoshop.js";
+import { registerShopifyCatalogCustomerTools } from "./tools/shopify-catalog-customers.js";
+import { registerShopifyDiscountTools } from "./tools/shopify-discounts.js";
+import { registerShopifyOrderTools } from "./tools/shopify-orders.js";
 import { registerShopTools } from "./tools/shopify.js";
 
 const SERVER_INSTRUCTIONS =
@@ -19,7 +22,11 @@ export function createServer(config: AppConfig): McpServer {
   );
   if (config.shopify) {
     const tokenProvider = createTokenProvider(config.shopify.storeDomain, config.shopify.auth);
-    registerShopTools(server, new ShopifyClient(config.shopify, tokenProvider));
+    const client = new ShopifyClient(config.shopify, tokenProvider);
+    registerShopTools(server, client);
+    registerShopifyCatalogCustomerTools(server, client);
+    registerShopifyOrderTools(server, client);
+    registerShopifyDiscountTools(server, client);
   }
   if (config.horoshop) {
     registerHoroshopTools(server, new HoroshopClient(config.horoshop));
