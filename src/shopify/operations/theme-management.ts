@@ -1,11 +1,12 @@
 import type { ShopifyClient } from "../client.js";
 import type { UserError } from "../errors.js";
+import type { ThemeRole } from "./themes.js";
 import { unwrapMutation } from "./mutation.js";
 
 export interface ManagedTheme {
   id: string;
   name: string;
-  role: string;
+  role: ThemeRole;
   processing: boolean;
   processingFailed: boolean;
 }

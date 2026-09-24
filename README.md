@@ -153,7 +153,7 @@ Shopify product images are submitted from public HTTPS URLs. Shopify processes t
 
 - `shopify_sales_report` reads native Shopify Analytics through [ShopifyQL](https://shopify.dev/docs/api/admin-graphql/latest/queries/shopifyqlQuery). Select a date range, total/daily/monthly interval, and metrics such as sales, orders, discounts, and average order value. This requires `read_reports` and Level 2 protected customer data access.
 - `shopify_order_summary` calculates order counts and current order totals from accessible orders. It reports `paginationComplete` and a cursor when it stops before the last page.
-- `horoshop_order_summary` calculates order counts, paid counts, totals by currency, and breakdowns by status and UTM source from the [Horoshop orders API](https://horoshop.notion.site/1b6cc28970798113b9b3fbd6fe844076). It scans at most 5,000 orders and reports `complete: false` if more may exist.
+- `horoshop_order_summary` calculates order counts, paid counts, totals by currency, and breakdowns by status and UTM source from the [Horoshop orders API](https://horoshop.notion.site/1b6cc28970798113b9b3fbd6fe844076). Currency totals are exact decimal strings, for example `"0.3"`. It scans at most 5,000 orders and reports `complete: false` if more may exist.
 
 The two order summaries are calculated from API orders, not native analytics reports or settled payment revenue. Horoshop `total_sum` includes discounts and excludes shipping. The server does not currently expose traffic, sessions, or conversion funnel analytics for Horoshop.
 

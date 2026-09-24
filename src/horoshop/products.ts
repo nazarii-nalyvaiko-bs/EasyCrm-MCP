@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { HoroshopClient } from "./client.js";
 
 export interface ProductSearch {
@@ -6,9 +7,10 @@ export interface ProductSearch {
   limit: number;
 }
 
-export interface HoroshopProduct extends Record<string, unknown> {
-  article: string;
-}
+const productSchema = z.object({ article: z.string().min(1) }).passthrough();
+const productListSchema = z.object({ products: z.array(productSchema) });
+
+export type HoroshopProduct = z.infer<typeof productSchema>;
 
 export async function listProducts(
   client: HoroshopClient,
@@ -21,13 +23,9 @@ export async function listProducts(
   });
   if (result.status === "EMPTY") return [];
   if (result.status !== "OK") throw new Error(`Horoshop catalog/export returned ${result.status}`);
-  const response = result.response;
-  if (!response || typeof response !== "object" || !("products" in response) || !Array.isArray(response.products) || response.products.some((product) =>
-    !product || typeof product !== "object" || !("article" in product) || typeof product.article !== "string"
-  )) {
-    throw new Error("Horoshop catalog/export returned an invalid product list");
-  }
-  return response.products as HoroshopProduct[];
+  const parsed = productListSchema.safeParse(result.response);
+  if (!parsed.success) throw new Error("Horoshop catalog/export returned an invalid product list");
+  return parsed.data.products;
 }
 
 export interface ProductUpdate {

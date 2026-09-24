@@ -1,9 +1,14 @@
+import { z } from "zod";
 import type { HoroshopConfig } from "./config.js";
 
-interface ApiEnvelope {
-  status: string;
-  response?: unknown;
-}
+const apiEnvelopeSchema = z.object({
+  status: z.string().min(1),
+  response: z.unknown().optional(),
+});
+const authResponseSchema = z.object({ token: z.string().min(1) });
+const errorResponseSchema = z.object({ message: z.string() });
+
+type ApiEnvelope = z.infer<typeof apiEnvelopeSchema>;
 
 export type HoroshopOperation =
   | "catalog/export"
@@ -15,10 +20,8 @@ export type HoroshopOperation =
   | "orders/update";
 
 function responseMessage(response: unknown): string | undefined {
-  if (response && typeof response === "object" && "message" in response && typeof response.message === "string") {
-    return response.message;
-  }
-  return undefined;
+  const parsed = errorResponseSchema.safeParse(response);
+  return parsed.success ? parsed.data.message : undefined;
 }
 
 export class HoroshopApiError extends Error {
@@ -60,20 +63,13 @@ export class HoroshopClient {
       password: this.config.password,
     })
       .then((result) => {
-        const response = result.response;
-        if (
-          result.status !== "OK" ||
-          !response ||
-          typeof response !== "object" ||
-          !("token" in response) ||
-          typeof response.token !== "string" ||
-          response.token === ""
-        ) {
-          throw new HoroshopApiError("auth", result.status, responseMessage(response));
+        const auth = authResponseSchema.safeParse(result.response);
+        if (result.status !== "OK" || !auth.success) {
+          throw new HoroshopApiError("auth", result.status, responseMessage(result.response));
         }
-        this.token = response.token;
+        this.token = auth.data.token;
         this.tokenExpiresAt = Date.now() + TOKEN_LIFETIME_MS;
-        return response.token;
+        return auth.data.token;
       })
       .finally(() => { this.authInFlight = null; });
     return this.authInFlight;
@@ -92,10 +88,10 @@ export class HoroshopClient {
       signal: AbortSignal.timeout(30_000),
     });
     if (!response.ok) throw new HoroshopApiError(operation, `HTTP ${response.status}`);
-    const result: unknown = await response.json();
-    if (!result || typeof result !== "object" || !("status" in result) || typeof result.status !== "string") {
+    const result = apiEnvelopeSchema.safeParse(await response.json());
+    if (!result.success) {
       throw new HoroshopApiError(operation, "INVALID_RESPONSE");
     }
-    return result as ApiEnvelope;
+    return result.data;
   }
 }

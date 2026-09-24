@@ -4,25 +4,20 @@ export interface HoroshopConfig {
   password: string;
 }
 
+const STORE_ORIGIN_ERROR =
+  "HOROSHOP_STORE_URL must be an HTTPS store origin, for example https://shop.example.com";
+
 export function normalizeHoroshopUrl(input: string): string {
   let url: URL;
   try {
     url = new URL(input.trim());
   } catch {
-    throw new Error("HOROSHOP_STORE_URL must be a full HTTPS URL, for example https://shop.example.com");
+    throw new Error(STORE_ORIGIN_ERROR);
   }
-  if (
-    url.protocol !== "https:" ||
-    !url.hostname ||
-    url.username ||
-    url.password ||
-    url.port ||
-    url.pathname !== "/" ||
-    url.search ||
-    url.hash
-  ) {
-    throw new Error("HOROSHOP_STORE_URL must be an HTTPS store origin without credentials, port, path, query, or fragment");
-  }
+  if (url.protocol !== "https:") throw new Error(STORE_ORIGIN_ERROR);
+  if (url.username || url.password) throw new Error(STORE_ORIGIN_ERROR);
+  if (url.port) throw new Error(STORE_ORIGIN_ERROR);
+  if (url.pathname !== "/" || url.search || url.hash) throw new Error(STORE_ORIGIN_ERROR);
   return url.origin;
 }
 

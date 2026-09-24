@@ -93,6 +93,17 @@ test("summary marks a capped result incomplete", async () => {
   assert.equal(result.pagesRead, 1);
 });
 
+test("summary counts status names from Shopify without inherited object properties", async () => {
+  const client = { query: async () => ({ orders: {
+    nodes: [order(1, "0.10", { displayFinancialStatus: "toString", displayFulfillmentStatus: "__proto__" })],
+    pageInfo: { hasNextPage: false, endCursor: null },
+  } }) };
+  const result = await summarizeOrders(client, { from: "2026-09-01", toExclusive: "2026-09-02", maxPages: 1 });
+  assert.deepEqual(result.byFinancialStatus, { toString: 1 });
+  assert.equal(result.byFulfillmentStatus.__proto__, 1);
+  assert.deepEqual(Object.keys(result.byFulfillmentStatus), ["__proto__"]);
+});
+
 test("cancellation passes explicit refund and restock choices without claiming completion", async () => {
   let variables;
   const client = { query: async (_query, input) => {

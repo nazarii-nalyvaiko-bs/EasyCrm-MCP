@@ -15,18 +15,54 @@ const config = {
 
 test("Horoshop URL accepts only an HTTPS store origin", () => {
   assert.equal(normalizeHoroshopUrl("https://shop.example.com/"), config.baseUrl);
-  assert.throws(() => normalizeHoroshopUrl("http://shop.example.com"));
-  assert.throws(() => normalizeHoroshopUrl("https://shop.example.com/api/auth/"));
-  assert.throws(() => normalizeHoroshopUrl("https://user:pass@shop.example.com"));
+  for (const invalid of [
+    "not a URL",
+    "http://shop.example.com",
+    "https://user:pass@shop.example.com",
+    "https://shop.example.com:8443",
+    "https://shop.example.com/api/auth/",
+    "https://shop.example.com?key=value",
+    "https://shop.example.com#section",
+  ]) {
+    assert.throws(() => normalizeHoroshopUrl(invalid), {
+      message: "HOROSHOP_STORE_URL must be an HTTPS store origin, for example https://shop.example.com",
+    });
+  }
+});
+
+test("rejects malformed Horoshop envelopes and preserves unknown API statuses", async (t) => {
+  let catalogCalls = 0;
+  t.mock.method(globalThis, "fetch", async (url) => {
+    if (url.endsWith("/api/auth/")) return Response.json({ status: "OK", response: { token: "token" } });
+    if (!url.endsWith("/api/catalog/export/")) throw new Error(`Unexpected request: ${url}`);
+    catalogCalls += 1;
+    return catalogCalls === 1
+      ? Response.json({ status: 42 })
+      : Response.json({ status: "NEW_ERROR", response: { message: "Not available" } });
+  });
+
+  const client = new HoroshopClient(config);
+  const search = { offset: 0, limit: 1 };
+  await assert.rejects(listProducts(client, search), {
+    name: "HoroshopApiError",
+    message: "Horoshop catalog/export failed (INVALID_RESPONSE)",
+  });
+  await assert.rejects(listProducts(client, search), {
+    name: "HoroshopApiError",
+    message: "Horoshop catalog/export failed (NEW_ERROR): Not available",
+  });
+  assert.equal(catalogCalls, 2);
 });
 
 test("reads Horoshop products with a cached API token", async (t) => {
   const requests = [];
   t.mock.method(globalThis, "fetch", async (url, options) => {
     requests.push({ url, body: JSON.parse(options.body) });
-    return Response.json(url.endsWith("/api/auth/")
-      ? { status: "OK", response: { token: "test-token" } }
-      : { status: "OK", response: { products: [{ article: "SKU-1", price: 42 }] } });
+    if (url.endsWith("/api/auth/")) return Response.json({ status: "OK", response: { token: "test-token" } });
+    if (url.endsWith("/api/catalog/export/")) {
+      return Response.json({ status: "OK", response: { products: [{ article: "SKU-1", price: 42 }] } });
+    }
+    throw new Error(`Unexpected request: ${url}`);
   });
 
   const client = new HoroshopClient(config);
@@ -43,6 +79,27 @@ test("reads Horoshop products with a cached API token", async (t) => {
   assert.equal("password" in requests[1].body, false);
 });
 
+test("rejects products without a usable article from Horoshop", async (t) => {
+  const requests = [];
+  t.mock.method(globalThis, "fetch", async (url) => {
+    requests.push(url);
+    if (url.endsWith("/auth/")) return Response.json({ status: "OK", response: { token: "token" } });
+    if (url.endsWith("/catalog/export/")) {
+      return Response.json({ status: "OK", response: { products: [{ article: "" }] } });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  });
+
+  await assert.rejects(
+    listProducts(new HoroshopClient(config), { offset: 0, limit: 1 }),
+    { message: "Horoshop catalog/export returned an invalid product list" },
+  );
+  assert.deepEqual(requests, [
+    "https://shop.example.com/api/auth/",
+    "https://shop.example.com/api/catalog/export/",
+  ]);
+});
+
 test("renews a Horoshop token after an unauthorized catalog response", async (t) => {
   let authCount = 0;
   let catalogCount = 0;
@@ -51,6 +108,7 @@ test("renews a Horoshop token after an unauthorized catalog response", async (t)
       authCount += 1;
       return Response.json({ status: "OK", response: { token: `token-${authCount}` } });
     }
+    if (!url.endsWith("/api/catalog/export/")) throw new Error(`Unexpected request: ${url}`);
     catalogCount += 1;
     return Response.json(catalogCount === 1
       ? { status: "UNAUTHORIZED" }
@@ -69,7 +127,8 @@ test("updates only supplied product fields after finding the exact article", asy
     requests.push({ url, body });
     if (url.endsWith("/auth/")) return Response.json({ status: "OK", response: { token: "token" } });
     if (url.endsWith("/catalog/export/")) return Response.json({ status: "OK", response: { products: [{ article: "SKU-1" }] } });
-    return Response.json({ status: "OK" });
+    if (url.endsWith("/catalog/import/")) return Response.json({ status: "OK" });
+    throw new Error(`Unexpected request: ${url}`);
   });
   const result = await updateProduct(new HoroshopClient(config), { article: "SKU-1", price: 42, visible: false });
   assert.deepEqual(result, { article: "SKU-1", updated: true });
@@ -77,15 +136,16 @@ test("updates only supplied product fields after finding the exact article", asy
     token: "token", products: [{ article: "SKU-1", price: 42, display_in_showcase: false }],
   });
   assert.equal(requests[2].url, "https://shop.example.com/api/catalog/import/");
+  assert.equal(requests.length, 3);
 });
 
 test("does not import a product when the article is absent", async (t) => {
   const operations = [];
   t.mock.method(globalThis, "fetch", async (url) => {
     operations.push(url);
-    return Response.json(url.endsWith("/auth/")
-      ? { status: "OK", response: { token: "token" } }
-      : { status: "EMPTY" });
+    if (url.endsWith("/auth/")) return Response.json({ status: "OK", response: { token: "token" } });
+    if (url.endsWith("/catalog/export/")) return Response.json({ status: "EMPTY" });
+    throw new Error(`Unexpected request: ${url}`);
   });
   await assert.rejects(updateProduct(new HoroshopClient(config), { article: "missing", price: 42 }), /not found/);
   assert.equal(operations.some((url) => url.endsWith("/catalog/import/")), false);
@@ -97,7 +157,8 @@ test("creates a Horoshop product in a selected category after checking the artic
     requests.push({ url, body: JSON.parse(options.body) });
     if (url.endsWith("/auth/")) return Response.json({ status: "OK", response: { token: "token" } });
     if (url.endsWith("/catalog/export/")) return Response.json({ status: "EMPTY" });
-    return Response.json({ status: "OK" });
+    if (url.endsWith("/catalog/import/")) return Response.json({ status: "OK" });
+    throw new Error(`Unexpected request: ${url}`);
   });
   assert.deepEqual(await createProduct(new HoroshopClient(config), {
     article: "NEW-1", title: "New product", categoryId: 8, price: 50,
@@ -105,6 +166,7 @@ test("creates a Horoshop product in a selected category after checking the artic
   assert.deepEqual(requests[2].body, {
     products: [{ article: "NEW-1", title: "New product", parent: { id: 8 }, price: 50 }], token: "token",
   });
+  assert.equal(requests.length, 3);
 });
 
 test("creates a Horoshop product with separate variant and common image galleries", async (t) => {
@@ -113,7 +175,8 @@ test("creates a Horoshop product with separate variant and common image gallerie
     requests.push({ url, body: JSON.parse(options.body) });
     if (url.endsWith("/auth/")) return Response.json({ status: "OK", response: { token: "token" } });
     if (url.endsWith("/catalog/export/")) return Response.json({ status: "EMPTY" });
-    return Response.json({ status: "OK" });
+    if (url.endsWith("/catalog/import/")) return Response.json({ status: "OK" });
+    throw new Error(`Unexpected request: ${url}`);
   });
 
   await createProduct(new HoroshopClient(config), {
@@ -126,6 +189,7 @@ test("creates a Horoshop product with separate variant and common image gallerie
     images: { links: ["https://images.example.com/variant.jpg"], override: false },
     gallery_common: { links: ["https://images.example.com/common.jpg"], override: false },
   });
+  assert.equal(requests.length, 3);
 });
 
 test("appends requested product images without removing existing images", async (t) => {
@@ -134,7 +198,8 @@ test("appends requested product images without removing existing images", async 
     requests.push({ url, body: JSON.parse(options.body) });
     if (url.endsWith("/auth/")) return Response.json({ status: "OK", response: { token: "token" } });
     if (url.endsWith("/catalog/export/")) return Response.json({ status: "OK", response: { products: [{ article: "SKU-1" }] } });
-    return Response.json({ status: "OK" });
+    if (url.endsWith("/catalog/import/")) return Response.json({ status: "OK" });
+    throw new Error(`Unexpected request: ${url}`);
   });
 
   await updateProduct(new HoroshopClient(config), {
@@ -143,6 +208,7 @@ test("appends requested product images without removing existing images", async 
   assert.deepEqual(requests[2].body.products[0], {
     article: "SKU-1", images: { links: ["https://images.example.com/new.jpg"], override: false },
   });
+  assert.equal(requests.length, 3);
 });
 
 test("replaces only the explicitly selected product image gallery", async (t) => {
@@ -151,7 +217,8 @@ test("replaces only the explicitly selected product image gallery", async (t) =>
     requests.push({ url, body: JSON.parse(options.body) });
     if (url.endsWith("/auth/")) return Response.json({ status: "OK", response: { token: "token" } });
     if (url.endsWith("/catalog/export/")) return Response.json({ status: "OK", response: { products: [{ article: "SKU-1" }] } });
-    return Response.json({ status: "OK" });
+    if (url.endsWith("/catalog/import/")) return Response.json({ status: "OK" });
+    throw new Error(`Unexpected request: ${url}`);
   });
 
   await updateProduct(new HoroshopClient(config), {
@@ -161,15 +228,18 @@ test("replaces only the explicitly selected product image gallery", async (t) =>
     article: "SKU-1", gallery_common: { links: ["https://images.example.com/new.jpg"], override: true },
   });
   assert.equal("images" in requests[2].body.products[0], false);
+  assert.equal(requests.length, 3);
 });
 
 test("rejects an empty replacement gallery before importing", async (t) => {
   const operations = [];
   t.mock.method(globalThis, "fetch", async (url) => {
     operations.push(url);
-    return Response.json(url.endsWith("/auth/")
-      ? { status: "OK", response: { token: "token" } }
-      : { status: "OK", response: { products: [{ article: "SKU-1" }] } });
+    if (url.endsWith("/auth/")) return Response.json({ status: "OK", response: { token: "token" } });
+    if (url.endsWith("/catalog/export/")) {
+      return Response.json({ status: "OK", response: { products: [{ article: "SKU-1" }] } });
+    }
+    throw new Error(`Unexpected request: ${url}`);
   });
 
   await assert.rejects(updateProduct(new HoroshopClient(config), {
@@ -182,9 +252,11 @@ test("does not overwrite a Horoshop product when creating with an existing artic
   const operations = [];
   t.mock.method(globalThis, "fetch", async (url) => {
     operations.push(url);
-    return Response.json(url.endsWith("/auth/")
-      ? { status: "OK", response: { token: "token" } }
-      : { status: "OK", response: { products: [{ article: "SKU-1" }] } });
+    if (url.endsWith("/auth/")) return Response.json({ status: "OK", response: { token: "token" } });
+    if (url.endsWith("/catalog/export/")) {
+      return Response.json({ status: "OK", response: { products: [{ article: "SKU-1" }] } });
+    }
+    throw new Error(`Unexpected request: ${url}`);
   });
   await assert.rejects(createProduct(new HoroshopClient(config), {
     article: "SKU-1", title: "Duplicate", categoryId: 8,
@@ -237,7 +309,7 @@ test("marks derived order analytics incomplete when the page cap is reached", as
   assert.deepEqual(offsets, [0, 100]);
   assert.equal(summary.orderCount, 200);
   assert.equal(summary.paidOrderCount, 200);
-  assert.deepEqual(summary.totalsByCurrency, { UAH: 2500 });
+  assert.deepEqual(summary.totalsByCurrency, { UAH: "2500" });
   assert.deepEqual(summary.countsByUtmSource, { search: 200 });
   assert.equal(summary.complete, false);
 });

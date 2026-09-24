@@ -60,12 +60,14 @@ test("creates a percentage code discount using Shopify's fraction format", async
 
 test("rejects invalid percentage before sending a mutation", async () => {
   const { calls, client } = clientReturning({});
-  await assert.rejects(createPercentageCodeDiscount(client, {
-    title: "Invalid",
-    code: "INVALID",
-    startsAt: "2026-09-25T00:00:00Z",
-    percentage: 110,
-  }), /percentage/);
+  for (const percentage of [110, Number.NaN, Number.POSITIVE_INFINITY]) {
+    await assert.rejects(createPercentageCodeDiscount(client, {
+      title: "Invalid",
+      code: "INVALID",
+      startsAt: "2026-09-25T00:00:00Z",
+      percentage,
+    }), /percentage/);
+  }
   assert.equal(calls.length, 0);
 });
 
@@ -191,6 +193,16 @@ test("rejects invalid automatic amount without sending a mutation", async () => 
     startsAt: "2026-09-25T00:00:00Z",
     value: { kind: "fixedAmount", amount: "0.00" },
   }), /greater than 0/);
+  assert.equal(calls.length, 0);
+});
+
+test("rejects non-finite automatic percentages before sending a mutation", async () => {
+  const { calls, client } = clientReturning({});
+  await assert.rejects(createAutomaticDiscount(client, {
+    title: "Invalid",
+    startsAt: "2026-09-25T00:00:00Z",
+    value: { kind: "percentage", percentage: Number.NaN },
+  }), /percentage/);
   assert.equal(calls.length, 0);
 });
 

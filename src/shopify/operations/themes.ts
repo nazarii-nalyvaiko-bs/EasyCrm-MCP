@@ -1,10 +1,12 @@
 import type { ShopifyClient } from "../client.js";
 import { ShopifyUserError, type UserError } from "../errors.js";
 
+export type ThemeRole = "ARCHIVED" | "DEMO" | "DEVELOPMENT" | "LOCKED" | "MAIN" | "UNPUBLISHED" | "MOBILE";
+
 interface Theme {
   id: string;
   name: string;
-  role: "MAIN" | "UNPUBLISHED" | "DEVELOPMENT" | "DEMO";
+  role: ThemeRole;
 }
 
 const LIST_THEMES_QUERY = `
@@ -23,7 +25,7 @@ interface UpdateThemeFileInput {
   themeId: string;
   filePath: string;
   fileContent: string;
-  expectedRole: Theme["role"];
+  expectedRole: ThemeRole;
   confirmLiveTheme?: boolean;
 }
 
@@ -67,6 +69,9 @@ export async function updateThemeFile(
   const { upsertedThemeFiles, job, userErrors } = data.themeFilesUpsert;
   if (userErrors.length > 0) throw new ShopifyUserError("themeFilesUpsert", userErrors);
   const filename = upsertedThemeFiles?.[0]?.filename;
+  if (filename && filename !== input.filePath) {
+    throw new Error(`Shopify confirmed ${filename} instead of ${input.filePath}`);
+  }
   if (!filename && !job?.id) throw new Error("Shopify did not confirm the theme file update");
   return {
     filename: filename ?? input.filePath,

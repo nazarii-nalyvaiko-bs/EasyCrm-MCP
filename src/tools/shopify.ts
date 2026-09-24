@@ -24,7 +24,7 @@ const themeFileLocationInput = {
 
 const updateThemeFileInput = {
   ...themeFileLocationInput,
-  expectedRole: z.enum(["MAIN", "UNPUBLISHED", "DEVELOPMENT", "DEMO"])
+  expectedRole: z.enum(["ARCHIVED", "DEMO", "DEVELOPMENT", "LOCKED", "MAIN", "MOBILE", "UNPUBLISHED"])
     .describe("Role observed from a fresh shopify_theme_list or shopify_theme_active call. The update fails if it changed."),
   confirmLiveTheme: z.boolean().default(false)
     .describe("Set true only after the user explicitly approves editing the active MAIN theme."),

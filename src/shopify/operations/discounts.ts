@@ -118,9 +118,7 @@ export async function createPercentageCodeDiscount(
   client: ShopifyClient,
   input: PercentageCodeDiscountInput,
 ): Promise<{ id: string }> {
-  if (input.percentage <= 0 || input.percentage > 100) {
-    throw new Error("percentage must be greater than 0 and at most 100");
-  }
+  assertPercentage(input.percentage);
   const { percentage, ...options } = input;
   return createBasicCodeDiscount(client, options, { percentage: percentage / 100 });
 }
@@ -164,6 +162,12 @@ function assertFixedAmount(amount: string): void {
   }
   if (Number(amount) <= 0) {
     throw new Error("amount must be greater than 0");
+  }
+}
+
+function assertPercentage(percentage: number): void {
+  if (!Number.isFinite(percentage) || percentage <= 0 || percentage > 100) {
+    throw new Error("percentage must be greater than 0 and at most 100");
   }
 }
 
@@ -254,9 +258,7 @@ export async function createAutomaticDiscount(
   input: AutomaticDiscountCreateInput,
 ): Promise<{ id: string }> {
   const { value, ...options } = input;
-  if (value.kind === "percentage" && (value.percentage <= 0 || value.percentage > 100)) {
-    throw new Error("percentage must be greater than 0 and at most 100");
-  }
+  if (value.kind === "percentage") assertPercentage(value.percentage);
   if (value.kind === "fixedAmount") assertFixedAmount(value.amount);
   const discountValue = value.kind === "percentage"
     ? { percentage: value.percentage / 100 }
